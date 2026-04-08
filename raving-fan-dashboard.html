@@ -353,7 +353,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
     <div class="signage-right">
       <!-- Panel 1: KPIs -->
       <div class="carousel-panel active" id="sig-panel-0">
-        <h2 class="text-2xl font-bold font-display text-white mb-6">This Week&#39;s Metrics</h2>
+        <h2 class="text-2xl font-bold font-display text-white mb-6">Quarter to Date</h2>
         <div class="grid grid-cols-2 gap-4">
           <div class="signage-kpi-card">
             <div class="text-sm text-gray-400">&#11088; 5-Star Reviews</div>
@@ -639,33 +639,51 @@ function render() {
   document.getElementById('loading-msg')?.classList.add('hidden');
   document.getElementById('error-msg')?.classList.add('hidden');
 
-  // Find most recent week with any non-zero activity for KPI display
-  const latest = state.scorecard[state.scorecard.length - 1];
+  // Compute quarterly cumulative totals for KPIs
+  // Determine current quarter boundaries
+  const now = new Date();
+  const qMonth = Math.floor(now.getMonth() / 3) * 3; // 0=Jan, 3=Apr, 6=Jul, 9=Oct
+  const qStart = new Date(now.getFullYear(), qMonth, 1);
+  const quarterWeeks = state.scorecard.filter(w => {
+    const d = new Date(w.weekEnd);
+    return d >= qStart && d <= now;
+  });
+  const qtd = {
+    reviews: quarterWeeks.reduce((s, w) => s + w.reviews, 0),
+    mentions: quarterWeeks.reduce((s, w) => s + w.mentions, 0),
+    referrals: quarterWeeks.reduce((s, w) => s + w.referrals, 0),
+    repeat: quarterWeeks.reduce((s, w) => s + w.repeat, 0),
+  };
+  qtd.fanScore = qtd.reviews + qtd.mentions + qtd.referrals + qtd.repeat;
+
+  // Most recent week with activity for the Fan Score banner
   const activeWeek = [...state.scorecard].reverse().find(w =>
     w.reviews > 0 || w.mentions > 0 || w.referrals > 0 || w.repeat > 0
-  ) || latest;
+  ) || state.scorecard[state.scorecard.length - 1];
+
+  // Trailing 30-day avg fan score
+  const recent4 = state.scorecard.slice(-4);
+  const trailingAvg = recent4.length ? Math.round(recent4.reduce((s, w) => s + w.fanScore, 0) / recent4.length) : 0;
+
   const refreshStr = new Date().toLocaleTimeString();
 
-  if (isSignage) renderSignage(activeWeek, refreshStr);
-  else renderStandard(activeWeek, refreshStr);
+  if (isSignage) renderSignage(qtd, activeWeek, trailingAvg, refreshStr);
+  else renderStandard(qtd, activeWeek, trailingAvg, refreshStr);
 }
 
-function renderStandard(latest, refreshStr) {
-  if (latest) {
-    document.getElementById('std-week-label').textContent = 'Week ending ' + latest.weekEnd;
+function renderStandard(qtd, activeWeek, trailingAvg, refreshStr) {
+  if (activeWeek) {
+    const qLabel = 'Q' + (Math.floor(new Date().getMonth() / 3) + 1) + ' ' + new Date().getFullYear();
+    document.getElementById('std-week-label').textContent = qLabel + ' Quarter to Date';
     document.getElementById('std-refresh-time').textContent = 'Last refreshed: ' + refreshStr;
 
-    setKPI('kpi-reviews', 'prog-reviews', 'prog-reviews-pct', latest.reviews, TARGETS.reviews);
-    setKPI('kpi-mentions', 'prog-mentions', 'prog-mentions-pct', latest.mentions, TARGETS.mentions);
-    setKPI('kpi-referrals', 'prog-referrals', 'prog-referrals-pct', latest.referrals, TARGETS.referrals);
-    setKPI('kpi-repeat', 'prog-repeat', 'prog-repeat-pct', latest.repeat, TARGETS.repeat);
+    setKPI('kpi-reviews', 'prog-reviews', 'prog-reviews-pct', qtd.reviews, TARGETS.reviews);
+    setKPI('kpi-mentions', 'prog-mentions', 'prog-mentions-pct', qtd.mentions, TARGETS.mentions);
+    setKPI('kpi-referrals', 'prog-referrals', 'prog-referrals-pct', qtd.referrals, TARGETS.referrals);
+    setKPI('kpi-repeat', 'prog-repeat', 'prog-repeat-pct', qtd.repeat, TARGETS.repeat);
 
-    document.getElementById('fan-score-big').textContent = latest.fanScore;
-
-    // Compute trailing 30-day avg
-    const recent = state.scorecard.slice(-4);
-    const avg = recent.length ? Math.round(recent.reduce((s,w) => s + w.fanScore, 0) / recent.length) : 0;
-    document.getElementById('fan-score-avg').textContent = avg;
+    document.getElementById('fan-score-big').textContent = activeWeek.fanScore;
+    document.getElementById('fan-score-avg').textContent = trailingAvg;
   }
 
   // Sparkline
@@ -780,25 +798,22 @@ function renderRepeatTable() {
 // =========================================================================
 // SIGNAGE RENDER
 // =========================================================================
-function renderSignage(latest, refreshStr) {
-  if (latest) {
-    document.getElementById('signage-fan-score').textContent = latest.fanScore;
+function renderSignage(qtd, activeWeek, trailingAvg, refreshStr) {
+  if (activeWeek) {
+    document.getElementById('signage-fan-score').textContent = activeWeek.fanScore;
+    document.getElementById('signage-avg').textContent = trailingAvg;
 
-    const recent = state.scorecard.slice(-4);
-    const avg = recent.length ? Math.round(recent.reduce((s,w) => s + w.fanScore, 0) / recent.length) : 0;
-    document.getElementById('signage-avg').textContent = avg;
-
-    // KPI panels
-    document.getElementById('sig-kpi-reviews').textContent = latest.reviews;
-    document.getElementById('sig-kpi-mentions').textContent = latest.mentions;
-    document.getElementById('sig-kpi-referrals').textContent = latest.referrals;
-    document.getElementById('sig-kpi-repeat').textContent = latest.repeat;
+    // KPI panels — quarterly cumulative
+    document.getElementById('sig-kpi-reviews').textContent = qtd.reviews;
+    document.getElementById('sig-kpi-mentions').textContent = qtd.mentions;
+    document.getElementById('sig-kpi-referrals').textContent = qtd.referrals;
+    document.getElementById('sig-kpi-repeat').textContent = qtd.repeat;
 
     setTimeout(() => {
-      setSignageProgress('sig-prog-reviews', latest.reviews, TARGETS.reviews);
-      setSignageProgress('sig-prog-mentions', latest.mentions, TARGETS.mentions);
-      setSignageProgress('sig-prog-referrals', latest.referrals, TARGETS.referrals);
-      setSignageProgress('sig-prog-repeat', latest.repeat, TARGETS.repeat);
+      setSignageProgress('sig-prog-reviews', qtd.reviews, TARGETS.reviews);
+      setSignageProgress('sig-prog-mentions', qtd.mentions, TARGETS.mentions);
+      setSignageProgress('sig-prog-referrals', qtd.referrals, TARGETS.referrals);
+      setSignageProgress('sig-prog-repeat', qtd.repeat, TARGETS.repeat);
     }, 300);
   }
 
