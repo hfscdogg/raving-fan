@@ -572,7 +572,8 @@ function parseScorecard(rows) {
     const mentions = parseInt(r[3]) || 0;
     const referrals = parseInt(r[4]) || 0;
     const repeat = parseInt(r[5]) || 0;
-    const fanScore = parseInt(r[6]) || 0;
+    const csvFanScore = parseInt(r[6]) || 0;
+    const fanScore = csvFanScore > 0 ? csvFanScore : (reviews + mentions + referrals + repeat);
     const notes = (r[7] || '').trim();
     if (!weekEnd || weekEnd.length < 4) continue;
     data.push({ weekBegin: r[0]?.trim(), weekEnd, reviews, mentions, referrals, repeat, fanScore, notes });
