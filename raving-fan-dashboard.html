@@ -1,0 +1,1010 @@
+<!--
+  =========================================================================
+  RAVING FAN DASHBOARD — Livewire
+  =========================================================================
+  Data Source: Google Sheets ID 10kdY3xtX7-OKT56Y89lad-s67fu-acvoUUOa8iAh_tI
+  
+  SETUP:
+  1. Make the Google Sheet publicly accessible:
+     Share > Anyone with the link > Viewer
+  2. Standard view: Open this file in any browser
+  3. Signage view (TV lobby): Append ?view=signage to the URL
+  4. Kiosk mode tip: Use F11 for fullscreen, or launch Chrome with
+     --kiosk flag: chrome --kiosk "file:///path/to/raving-fan-dashboard.html?view=signage"
+  5. Data auto-refreshes every 90 seconds
+  =========================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raving Fan Dashboard — Livewire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        navy: '#0D1B2A',
+        electric: '#1E6FE8',
+        gold: '#F59E0B',
+        green: '#10B981',
+        amber: '#F59E0B',
+        red: '#EF4444',
+      },
+      fontFamily: {
+        display: ['Syne', 'sans-serif'],
+        body: ['DM Sans', 'sans-serif'],
+      }
+    }
+  }
+}
+</script>
+<style>
+:root {
+  --navy: #0D1B2A;
+  --white: #F8F9FA;
+  --electric: #1E6FE8;
+  --gold: #F59E0B;
+  --green: #10B981;
+  --amber: #F59E0B;
+  --red: #EF4444;
+  --card-bg: #FFFFFF;
+  --border: #E5E7EB;
+}
+* { box-sizing: border-box; }
+body { font-family: 'DM Sans', sans-serif; margin: 0; background: var(--white); color: var(--navy); }
+h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
+
+/* Standard View */
+.std-header { background: white; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; }
+.kpi-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  opacity: 0;
+  animation: fadeInUp 0.5s ease forwards;
+}
+.kpi-card:nth-child(1) { animation-delay: 0ms; }
+.kpi-card:nth-child(2) { animation-delay: 100ms; }
+.kpi-card:nth-child(3) { animation-delay: 200ms; }
+.kpi-card:nth-child(4) { animation-delay: 300ms; }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.progress-bar-bg {
+  background: #E5E7EB;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 1.2s ease;
+  width: 0;
+}
+
+.tab-btn {
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #6B7280;
+  background: none;
+  border-top: none; border-left: none; border-right: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+}
+.tab-btn.active { color: var(--electric); border-bottom-color: var(--electric); }
+.tab-btn:hover { color: var(--navy); }
+
+.fan-score-green { color: var(--green); }
+.fan-score-amber { color: var(--amber); }
+.fan-score-red { color: var(--red); }
+
+.review-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+/* Signage View */
+.signage { background: var(--navy); color: white; height: 100vh; overflow: hidden; display: none; flex-direction: column; }
+.signage-topbar { background: rgba(0,0,0,0.3); padding: 0.75rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+.signage-main { flex: 1; display: flex; padding: 2rem; gap: 2rem; overflow: hidden; }
+.signage-left { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.signage-right { width: 60%; position: relative; }
+.signage-bottom { background: rgba(0,0,0,0.3); padding: 0.75rem 2rem; text-align: center; }
+
+.carousel-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  padding: 2rem;
+}
+.carousel-panel.active { opacity: 1; }
+
+@keyframes pulse-glow {
+  0%, 100% { text-shadow: 0 0 20px rgba(245,158,11,0.3); }
+  50% { text-shadow: 0 0 40px rgba(245,158,11,0.6); }
+}
+.pulse-score { animation: pulse-glow 3s ease-in-out infinite; }
+
+.signage-kpi-card {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.signage-progress-bg {
+  background: rgba(255,255,255,0.15);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+.signage-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 1.2s ease;
+}
+</style>
+</head>
+<body>
+<!-- ==================== STANDARD VIEW ==================== -->
+<div id="standard-view">
+  <!-- Header -->
+  <div class="std-header">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+      <div>
+        <h1 class="text-2xl font-bold text-navy tracking-tight">LIVEWIRE</h1>
+        <p class="text-sm text-gray-500 font-display">Raving Fan Factory</p>
+      </div>
+      <div class="text-right text-sm text-gray-500">
+        <div id="std-week-label">Week ending —</div>
+        <div>Prepared by Stacy</div>
+        <div id="std-refresh-time">Last refreshed: —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <!-- KPI Hero Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="kpi-row">
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium text-gray-500">&#11088; 5-Star Reviews</span>
+          <span class="text-2xl font-bold font-display text-navy" id="kpi-reviews">—</span>
+        </div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-reviews"></div></div>
+        <div class="flex justify-between text-xs text-gray-400">
+          <span>Target: 24</span>
+          <span id="prog-reviews-pct">—</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">Champion: Ben Dalton</div>
+      </div>
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium text-gray-500">&#128100; Staff Mentions</span>
+          <span class="text-2xl font-bold font-display text-navy" id="kpi-mentions">—</span>
+        </div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-mentions"></div></div>
+        <div class="flex justify-between text-xs text-gray-400">
+          <span>Target: 13</span>
+          <span id="prog-mentions-pct">—</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">Champion: Ben Dalton</div>
+      </div>
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium text-gray-500">&#128257; Referred Leads</span>
+          <span class="text-2xl font-bold font-display text-navy" id="kpi-referrals">—</span>
+        </div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-referrals"></div></div>
+        <div class="flex justify-between text-xs text-gray-400">
+          <span>Target: 60</span>
+          <span id="prog-referrals-pct">—</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">Champion: Dustin Roskam</div>
+      </div>
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium text-gray-500">&#9851;&#65039; Repeat Clients</span>
+          <span class="text-2xl font-bold font-display text-navy" id="kpi-repeat">—</span>
+        </div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-repeat"></div></div>
+        <div class="flex justify-between text-xs text-gray-400">
+          <span>Target: 24</span>
+          <span id="prog-repeat-pct">—</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">Champion: Brian Mosier</div>
+      </div>
+    </div>
+
+    <!-- Total Fan Score Banner -->
+    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6 flex flex-col md:flex-row items-center gap-6">
+      <div class="text-center md:text-left">
+        <div class="text-sm font-medium text-gray-500 mb-1">&#128293; Total Fan Score</div>
+        <div class="text-5xl font-extrabold font-display text-gold" id="fan-score-big">—</div>
+        <div class="text-sm text-gray-500 mt-1">
+          Trailing 30-day avg: <span class="font-semibold" id="fan-score-avg">8</span>
+          <span id="fan-score-trend" class="ml-1">&#9650;</span>
+        </div>
+      </div>
+      <div class="flex-1 w-full" style="min-height:80px; max-height:100px;">
+        <canvas id="sparkline-std"></canvas>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 border-b border-gray-200 mb-4 overflow-x-auto">
+      <button class="tab-btn active" data-tab="scorecard">Weekly Scorecard</button>
+      <button class="tab-btn" data-tab="reviews">Google Reviews</button>
+      <button class="tab-btn" data-tab="referrals">Referred Leads</button>
+      <button class="tab-btn" data-tab="repeat">Repeat Clients</button>
+    </div>
+
+    <!-- Tab Content: Scorecard -->
+    <div id="tab-scorecard" class="tab-content">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-gray-500 border-b border-gray-200">
+              <th class="py-2 px-3 font-medium">Week Ending</th>
+              <th class="py-2 px-3 font-medium text-center">&#11088; Reviews</th>
+              <th class="py-2 px-3 font-medium text-center">&#128100; Mentions</th>
+              <th class="py-2 px-3 font-medium text-center">&#128257; Referrals</th>
+              <th class="py-2 px-3 font-medium text-center">&#9851;&#65039; Repeat</th>
+              <th class="py-2 px-3 font-medium text-center">&#128293; Fan Score</th>
+              <th class="py-2 px-3 font-medium">Notes</th>
+            </tr>
+          </thead>
+          <tbody id="scorecard-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab Content: Reviews -->
+    <div id="tab-reviews" class="tab-content hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="reviews-grid"></div>
+    </div>
+
+    <!-- Tab Content: Referrals -->
+    <div id="tab-referrals" class="tab-content hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-gray-500 border-b border-gray-200">
+              <th class="py-2 px-3 font-medium">Project</th>
+              <th class="py-2 px-3 font-medium">Referred By</th>
+              <th class="py-2 px-3 font-medium text-right">Amount</th>
+              <th class="py-2 px-3 font-medium">Stage</th>
+            </tr>
+          </thead>
+          <tbody id="referrals-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab Content: Repeat Clients -->
+    <div id="tab-repeat" class="tab-content hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-gray-500 border-b border-gray-200">
+              <th class="py-2 px-3 font-medium">Client / Project</th>
+              <th class="py-2 px-3 font-medium">Closing Date</th>
+              <th class="py-2 px-3 font-medium">Service Plan</th>
+              <th class="py-2 px-3 font-medium text-right">Amount</th>
+              <th class="py-2 px-3 font-medium text-right">GM%</th>
+            </tr>
+          </thead>
+          <tbody id="repeat-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Loading / Error state -->
+    <div id="loading-msg" class="text-center py-12 text-gray-400">
+      <div class="animate-spin inline-block w-8 h-8 border-4 border-electric border-t-transparent rounded-full mb-3"></div>
+      <div>Loading dashboard data...</div>
+    </div>
+    <div id="error-msg" class="hidden text-center py-12 text-gray-400">
+      <div class="text-4xl mb-3">&#9888;&#65039;</div>
+      <div>Unable to load data from Google Sheets.</div>
+      <div class="text-sm mt-1">Make sure the sheet is shared publicly. Retrying in 90 seconds...</div>
+    </div>
+  </div>
+</div>
+<!-- ==================== SIGNAGE VIEW ==================== -->
+<div id="signage-view" class="signage">
+  <div class="signage-topbar">
+    <h1 class="text-xl font-bold font-display tracking-wider">LIVEWIRE <span class="text-gold font-normal text-base ml-2">RAVING FAN FACTORY</span></h1>
+    <div class="text-sm opacity-80 font-body" id="signage-clock"></div>
+  </div>
+  <div class="signage-main">
+    <div class="signage-left">
+      <div class="text-sm uppercase tracking-widest text-gray-400 mb-2 font-display">Total Fan Score</div>
+      <div class="text-9xl font-extrabold font-display text-gold pulse-score" id="signage-fan-score" style="font-size:9rem;line-height:1;">—</div>
+      <div class="text-lg text-gray-300 mt-3">
+        30-day avg: <span class="font-semibold text-white" id="signage-avg">8</span>
+        <span class="text-green ml-1" id="signage-trend">&#9650;</span>
+      </div>
+      <div class="w-full mt-6" style="height:80px;">
+        <canvas id="sparkline-signage"></canvas>
+      </div>
+    </div>
+    <div class="signage-right">
+      <!-- Panel 1: KPIs -->
+      <div class="carousel-panel active" id="sig-panel-0">
+        <h2 class="text-2xl font-bold font-display text-white mb-6">This Week&#39;s Metrics</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="signage-kpi-card">
+            <div class="text-sm text-gray-400">&#11088; 5-Star Reviews</div>
+            <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-reviews">—</div>
+            <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-reviews"></div></div>
+            <div class="text-xs text-gray-500 mt-1">Target: 24</div>
+          </div>
+          <div class="signage-kpi-card">
+            <div class="text-sm text-gray-400">&#128100; Staff Mentions</div>
+            <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-mentions">—</div>
+            <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-mentions"></div></div>
+            <div class="text-xs text-gray-500 mt-1">Target: 13</div>
+          </div>
+          <div class="signage-kpi-card">
+            <div class="text-sm text-gray-400">&#128257; Referred Leads</div>
+            <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-referrals">—</div>
+            <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-referrals"></div></div>
+            <div class="text-xs text-gray-500 mt-1">Target: 60</div>
+          </div>
+          <div class="signage-kpi-card">
+            <div class="text-sm text-gray-400">&#9851;&#65039; Repeat Clients</div>
+            <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-repeat">—</div>
+            <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-repeat"></div></div>
+            <div class="text-xs text-gray-500 mt-1">Target: 24</div>
+          </div>
+        </div>
+      </div>
+      <!-- Panel 2: Most recent review -->
+      <div class="carousel-panel" id="sig-panel-1">
+        <h2 class="text-xl font-bold font-display text-gold mb-4">&#11088; Latest Google Review</h2>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+          <div class="text-2xl text-gold mb-3">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="text-lg text-gray-200 leading-relaxed" id="sig-review-1-text"></p>
+          <div class="mt-4 flex items-center gap-3">
+            <span class="text-white font-semibold" id="sig-review-1-name"></span>
+            <span class="text-gray-500" id="sig-review-1-date"></span>
+            <span class="bg-gold/20 text-gold px-2 py-0.5 rounded text-sm" id="sig-review-1-badge"></span>
+          </div>
+        </div>
+      </div>
+      <!-- Panel 3: Second most recent review -->
+      <div class="carousel-panel" id="sig-panel-2">
+        <h2 class="text-xl font-bold font-display text-gold mb-4">&#11088; Recent Google Review</h2>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+          <div class="text-2xl text-gold mb-3">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="text-lg text-gray-200 leading-relaxed" id="sig-review-2-text"></p>
+          <div class="mt-4 flex items-center gap-3">
+            <span class="text-white font-semibold" id="sig-review-2-name"></span>
+            <span class="text-gray-500" id="sig-review-2-date"></span>
+            <span class="bg-gold/20 text-gold px-2 py-0.5 rounded text-sm" id="sig-review-2-badge"></span>
+          </div>
+        </div>
+      </div>
+      <!-- Panel 4: Top referred leads -->
+      <div class="carousel-panel" id="sig-panel-3">
+        <h2 class="text-xl font-bold font-display text-white mb-6">&#128257; Top Referred Leads</h2>
+        <div class="space-y-4" id="sig-top-referrals"></div>
+      </div>
+      <!-- Panel 5: Top repeat clients -->
+      <div class="carousel-panel" id="sig-panel-4">
+        <h2 class="text-xl font-bold font-display text-white mb-6">&#9851;&#65039; Top Repeat Clients</h2>
+        <div class="space-y-4" id="sig-top-repeat"></div>
+      </div>
+      <!-- Panel 6: Champions -->
+      <div class="carousel-panel" id="sig-panel-5">
+        <h2 class="text-xl font-bold font-display text-gold mb-6">&#127942; Metric Champions</h2>
+        <div class="space-y-4">
+          <div class="signage-kpi-card flex items-center gap-4">
+            <div class="text-3xl">&#11088;</div>
+            <div>
+              <div class="text-white font-bold text-lg">Ben Dalton</div>
+              <div class="text-gray-400 text-sm">Google Reviews + Staff Mentions</div>
+            </div>
+          </div>
+          <div class="signage-kpi-card flex items-center gap-4">
+            <div class="text-3xl">&#128257;</div>
+            <div>
+              <div class="text-white font-bold text-lg">Dustin Roskam</div>
+              <div class="text-gray-400 text-sm">Referred Leads</div>
+            </div>
+          </div>
+          <div class="signage-kpi-card flex items-center gap-4">
+            <div class="text-3xl">&#9851;&#65039;</div>
+            <div>
+              <div class="text-white font-bold text-lg">Brian Mosier</div>
+              <div class="text-gray-400 text-sm">Repeat Clients</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="signage-bottom">
+    <p class="text-gray-300 italic text-lg font-body" id="signage-bottom-text">Did we create a raving fan this week &mdash; and why?</p>
+  </div>
+</div>
+<script>
+// =========================================================================
+// CONFIG & STATE
+// =========================================================================
+const SHEET_ID = '10kdY3xtX7-OKT56Y89lad-s67fu-acvoUUOa8iAh_tI';
+const SHEETS = {
+  scorecard: { gid: 0, dataStartRow: 4 },
+  reviews:   { gid: 1, dataStartRow: 4 },
+  referrals: { gid: 2, dataStartRow: 1 },
+  repeat:    { gid: 3, dataStartRow: 1 },
+};
+const TARGETS = { reviews: 24, mentions: 13, referrals: 60, repeat: 24 };
+const CHAMPIONS = {
+  reviews: 'Ben Dalton', mentions: 'Ben Dalton',
+  referrals: 'Dustin Roskam', repeat: 'Brian Mosier'
+};
+const REFRESH_INTERVAL = 90000;
+const CAROUSEL_INTERVAL = 8000;
+const TOTAL_PANELS = 6;
+
+const isSignage = new URLSearchParams(window.location.search).get('view') === 'signage';
+let state = { scorecard: [], reviews: [], referrals: [], repeat: [], loaded: false };
+let sparkChartStd = null, sparkChartSig = null;
+let carouselIdx = 0, carouselTimer = null;
+
+// =========================================================================
+// CSV FETCHING
+// =========================================================================
+function sheetURL(gid) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+}
+
+function fetchCSV(gid) {
+  return new Promise((resolve) => {
+    Papa.parse(sheetURL(gid), {
+      download: true,
+      skipEmptyLines: true,
+      complete: (results) => resolve(results.data),
+      error: () => resolve(null)
+    });
+  });
+}
+
+async function fetchAllData() {
+  const [sc, rv, rf, rp] = await Promise.all([
+    fetchCSV(SHEETS.scorecard.gid),
+    fetchCSV(SHEETS.reviews.gid),
+    fetchCSV(SHEETS.referrals.gid),
+    fetchCSV(SHEETS.repeat.gid),
+  ]);
+
+  let anyLoaded = false;
+
+  if (sc) {
+    state.scorecard = parseScorecard(sc);
+    anyLoaded = true;
+  }
+  if (rv) {
+    state.reviews = parseReviews(rv);
+    anyLoaded = true;
+  }
+  if (rf) {
+    state.referrals = parseReferrals(rf);
+    anyLoaded = true;
+  }
+  if (rp) {
+    state.repeat = parseRepeatClients(rp);
+    anyLoaded = true;
+  }
+
+  if (anyLoaded) {
+    state.loaded = true;
+    render();
+  } else if (!state.loaded) {
+    document.getElementById('loading-msg')?.classList.add('hidden');
+    document.getElementById('error-msg')?.classList.remove('hidden');
+  }
+}
+
+// =========================================================================
+// PARSERS
+// =========================================================================
+function parseScorecard(rows) {
+  const data = [];
+  for (let i = SHEETS.scorecard.dataStartRow; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0] || !r[1]) continue;
+    const weekEnd = r[1]?.trim();
+    const reviews = parseInt(r[2]) || 0;
+    const mentions = parseInt(r[3]) || 0;
+    const referrals = parseInt(r[4]) || 0;
+    const repeat = parseInt(r[5]) || 0;
+    const fanScore = parseInt(r[6]) || 0;
+    const notes = (r[7] || '').trim();
+    if (!weekEnd || weekEnd.length < 4) continue;
+    data.push({ weekBegin: r[0]?.trim(), weekEnd, reviews, mentions, referrals, repeat, fanScore, notes });
+  }
+  return data;
+}
+
+function parseReviews(rows) {
+  const data = [];
+  for (let i = SHEETS.reviews.dataStartRow; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    data.push({
+      firstName: (r[0] || '').trim(),
+      lastName: (r[1] || '').trim(),
+      rating: parseInt(r[2]) || 5,
+      text: (r[3] || '').trim(),
+      named: (r[4] || '').trim(),
+      date: (r[5] || '').trim()
+    });
+  }
+  return data;
+}
+
+function parseReferrals(rows) {
+  const data = [];
+  for (let i = SHEETS.referrals.dataStartRow; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    data.push({
+      name: (r[0] || '').trim(),
+      amount: (r[1] || '').trim(),
+      referral: (r[2] || '').trim(),
+      referredBy: (r[3] || '').trim(),
+      stage: (r[4] || '').trim(),
+      createdTime: (r[5] || '').trim()
+    });
+  }
+  return data;
+}
+
+function parseRepeatClients(rows) {
+  const data = [];
+  for (let i = SHEETS.repeat.dataStartRow; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    data.push({
+      name: (r[0] || '').trim(),
+      stage: (r[1] || '').trim(),
+      closingDate: (r[2] || '').trim(),
+      servicePlan: (r[3] || '').trim(),
+      amount: (r[4] || '').trim(),
+      gm: (r[5] || '').trim()
+    });
+  }
+  return data;
+}
+
+// =========================================================================
+// RENDER
+// =========================================================================
+function render() {
+  document.getElementById('loading-msg')?.classList.add('hidden');
+  document.getElementById('error-msg')?.classList.add('hidden');
+
+  const latest = state.scorecard[state.scorecard.length - 1];
+  const refreshStr = new Date().toLocaleTimeString();
+
+  if (isSignage) renderSignage(latest, refreshStr);
+  else renderStandard(latest, refreshStr);
+}
+
+function renderStandard(latest, refreshStr) {
+  if (latest) {
+    document.getElementById('std-week-label').textContent = 'Week ending ' + latest.weekEnd;
+    document.getElementById('std-refresh-time').textContent = 'Last refreshed: ' + refreshStr;
+
+    setKPI('kpi-reviews', 'prog-reviews', 'prog-reviews-pct', latest.reviews, TARGETS.reviews);
+    setKPI('kpi-mentions', 'prog-mentions', 'prog-mentions-pct', latest.mentions, TARGETS.mentions);
+    setKPI('kpi-referrals', 'prog-referrals', 'prog-referrals-pct', latest.referrals, TARGETS.referrals);
+    setKPI('kpi-repeat', 'prog-repeat', 'prog-repeat-pct', latest.repeat, TARGETS.repeat);
+
+    document.getElementById('fan-score-big').textContent = latest.fanScore;
+
+    // Compute trailing 30-day avg
+    const recent = state.scorecard.slice(-4);
+    const avg = recent.length ? Math.round(recent.reduce((s,w) => s + w.fanScore, 0) / recent.length) : 0;
+    document.getElementById('fan-score-avg').textContent = avg;
+  }
+
+  // Sparkline
+  renderSparkline('sparkline-std', false);
+
+  // Scorecard table
+  renderScorecardTable();
+
+  // Reviews grid
+  renderReviewsGrid();
+
+  // Referrals table
+  renderReferralsTable();
+
+  // Repeat table
+  renderRepeatTable();
+}
+
+function setKPI(valId, barId, pctId, value, target) {
+  document.getElementById(valId).textContent = value;
+  const pct = Math.min(100, Math.round((value / target) * 100));
+  setTimeout(() => {
+    document.getElementById(barId).style.width = pct + '%';
+  }, 200);
+  document.getElementById(pctId).textContent = pct + '%';
+}
+
+function fanScoreClass(score) {
+  if (score >= 12) return 'fan-score-green';
+  if (score >= 8) return 'fan-score-amber';
+  return 'fan-score-red';
+}
+
+function renderScorecardTable() {
+  const body = document.getElementById('scorecard-body');
+  if (!body) return;
+  const sorted = [...state.scorecard].reverse();
+  body.innerHTML = sorted.map(w => `
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="py-2 px-3 text-gray-700">${w.weekEnd}</td>
+      <td class="py-2 px-3 text-center">${w.reviews}</td>
+      <td class="py-2 px-3 text-center">${w.mentions}</td>
+      <td class="py-2 px-3 text-center">${w.referrals}</td>
+      <td class="py-2 px-3 text-center">${w.repeat}</td>
+      <td class="py-2 px-3 text-center font-bold ${fanScoreClass(w.fanScore)}">${w.fanScore}</td>
+      <td class="py-2 px-3 text-gray-500 text-xs max-w-[200px] truncate">${w.notes}</td>
+    </tr>
+  `).join('');
+}
+
+function renderReviewsGrid() {
+  const grid = document.getElementById('reviews-grid');
+  if (!grid) return;
+  grid.innerHTML = state.reviews.map((rv, i) => {
+    const stars = '&#9733;'.repeat(rv.rating);
+    const truncated = rv.text.length > 150 ? rv.text.slice(0, 150) + '...' : rv.text;
+    const fullText = rv.text.length > 150 ? rv.text : '';
+    const badge = rv.named ? `<span class="inline-block bg-gold/10 text-gold text-xs px-2 py-0.5 rounded mt-2">&#127941; ${rv.named}</span>` : '';
+    return `
+      <div class="review-card">
+        <div class="flex justify-between items-start mb-2">
+          <span class="font-semibold text-navy">${rv.firstName} ${rv.lastName}</span>
+          <span class="text-xs text-gray-400">${rv.date}</span>
+        </div>
+        <div class="text-gold text-sm mb-2">${stars}</div>
+        <p class="text-sm text-gray-600 leading-relaxed" id="review-text-${i}">${truncated}</p>
+        ${fullText ? `<button class="text-xs text-electric mt-1 hover:underline" onclick="toggleReview(${i}, this)">Show more</button>` : ''}
+        ${badge}
+      </div>
+    `;
+  }).join('');
+
+  // Store full texts for expand/collapse
+  window._reviewTexts = state.reviews.map(r => r.text);
+}
+
+function renderReferralsTable() {
+  const body = document.getElementById('referrals-body');
+  if (!body) return;
+  const sorted = [...state.referrals].sort((a, b) => {
+    const da = new Date(a.createdTime), db = new Date(b.createdTime);
+    return db - da;
+  });
+  body.innerHTML = sorted.map(r => `
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="py-2 px-3 text-gray-700">${r.name}</td>
+      <td class="py-2 px-3">${r.referredBy}</td>
+      <td class="py-2 px-3 text-right font-medium">${r.amount}</td>
+      <td class="py-2 px-3"><span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">${r.stage}</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderRepeatTable() {
+  const body = document.getElementById('repeat-body');
+  if (!body) return;
+  const sorted = [...state.repeat].sort((a, b) => {
+    const da = new Date(a.closingDate), db = new Date(b.closingDate);
+    return db - da;
+  });
+  body.innerHTML = sorted.map(r => `
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="py-2 px-3 text-gray-700">${r.name}</td>
+      <td class="py-2 px-3">${r.closingDate}</td>
+      <td class="py-2 px-3">${r.servicePlan}</td>
+      <td class="py-2 px-3 text-right font-medium">${r.amount}</td>
+      <td class="py-2 px-3 text-right">${r.gm}</td>
+    </tr>
+  `).join('');
+}
+
+// =========================================================================
+// SIGNAGE RENDER
+// =========================================================================
+function renderSignage(latest, refreshStr) {
+  if (latest) {
+    document.getElementById('signage-fan-score').textContent = latest.fanScore;
+
+    const recent = state.scorecard.slice(-4);
+    const avg = recent.length ? Math.round(recent.reduce((s,w) => s + w.fanScore, 0) / recent.length) : 0;
+    document.getElementById('signage-avg').textContent = avg;
+
+    // KPI panels
+    document.getElementById('sig-kpi-reviews').textContent = latest.reviews;
+    document.getElementById('sig-kpi-mentions').textContent = latest.mentions;
+    document.getElementById('sig-kpi-referrals').textContent = latest.referrals;
+    document.getElementById('sig-kpi-repeat').textContent = latest.repeat;
+
+    setTimeout(() => {
+      setSignageProgress('sig-prog-reviews', latest.reviews, TARGETS.reviews);
+      setSignageProgress('sig-prog-mentions', latest.mentions, TARGETS.mentions);
+      setSignageProgress('sig-prog-referrals', latest.referrals, TARGETS.referrals);
+      setSignageProgress('sig-prog-repeat', latest.repeat, TARGETS.repeat);
+    }, 300);
+  }
+
+  // Reviews panels
+  if (state.reviews.length >= 1) {
+    const r1 = state.reviews[state.reviews.length - 1];
+    document.getElementById('sig-review-1-text').textContent = r1.text;
+    document.getElementById('sig-review-1-name').textContent = r1.firstName + ' ' + r1.lastName;
+    document.getElementById('sig-review-1-date').textContent = r1.date;
+    document.getElementById('sig-review-1-badge').textContent = r1.named ? '\u{1F3C5} ' + r1.named : '';
+    document.getElementById('sig-review-1-badge').style.display = r1.named ? '' : 'none';
+  }
+  if (state.reviews.length >= 2) {
+    const r2 = state.reviews[state.reviews.length - 2];
+    document.getElementById('sig-review-2-text').textContent = r2.text;
+    document.getElementById('sig-review-2-name').textContent = r2.firstName + ' ' + r2.lastName;
+    document.getElementById('sig-review-2-date').textContent = r2.date;
+    document.getElementById('sig-review-2-badge').textContent = r2.named ? '\u{1F3C5} ' + r2.named : '';
+    document.getElementById('sig-review-2-badge').style.display = r2.named ? '' : 'none';
+  }
+
+  // Top referrals
+  const topRef = [...state.referrals]
+    .sort((a, b) => parseAmount(b.amount) - parseAmount(a.amount))
+    .slice(0, 3);
+  document.getElementById('sig-top-referrals').innerHTML = topRef.map((r, i) => `
+    <div class="signage-kpi-card flex items-center justify-between">
+      <div>
+        <div class="text-white font-bold">${r.name}</div>
+        <div class="text-gray-400 text-sm">Referred by ${r.referredBy}</div>
+      </div>
+      <div class="text-2xl font-bold font-display text-electric">${r.amount}</div>
+    </div>
+  `).join('');
+
+  // Top repeat clients
+  const topRep = [...state.repeat]
+    .sort((a, b) => parseAmount(b.amount) - parseAmount(a.amount))
+    .slice(0, 3);
+  document.getElementById('sig-top-repeat').innerHTML = topRep.map((r, i) => `
+    <div class="signage-kpi-card flex items-center justify-between">
+      <div>
+        <div class="text-white font-bold">${r.name}</div>
+        <div class="text-gray-400 text-sm">${r.servicePlan || r.stage}</div>
+      </div>
+      <div class="text-2xl font-bold font-display text-electric">${r.amount}</div>
+    </div>
+  `).join('');
+
+  // Sparkline
+  renderSparkline('sparkline-signage', true);
+
+  // Bottom text rotation
+  setupBottomTextRotation();
+}
+
+function setSignageProgress(id, value, target) {
+  const pct = Math.min(100, Math.round((value / target) * 100));
+  document.getElementById(id).style.width = pct + '%';
+}
+
+function parseAmount(str) {
+  if (!str) return 0;
+  return parseFloat(str.replace(/[$,]/g, '')) || 0;
+}
+
+// =========================================================================
+// SPARKLINE CHART
+// =========================================================================
+function renderSparkline(canvasId, isDark) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || state.scorecard.length === 0) return;
+
+  const labels = state.scorecard.map(w => w.weekEnd);
+  const data = state.scorecard.map(w => w.fanScore);
+
+  const chartRef = canvasId === 'sparkline-std' ? 'sparkChartStd' : 'sparkChartSig';
+  if (window[chartRef]) {
+    window[chartRef].data.labels = labels;
+    window[chartRef].data.datasets[0].data = data;
+    window[chartRef].update('none');
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight);
+  if (isDark) {
+    gradient.addColorStop(0, 'rgba(245, 158, 11, 0.3)');
+    gradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
+  } else {
+    gradient.addColorStop(0, 'rgba(30, 111, 232, 0.15)');
+    gradient.addColorStop(1, 'rgba(30, 111, 232, 0)');
+  }
+
+  window[chartRef] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: isDark ? '#F59E0B' : '#1E6FE8',
+        backgroundColor: gradient,
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.35,
+        pointRadius: 3,
+        pointBackgroundColor: isDark ? '#F59E0B' : '#1E6FE8',
+        pointBorderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 1200, easing: 'easeOutQuart' },
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: isDark ? '#1E293B' : '#0D1B2A',
+        titleColor: '#F8F9FA',
+        bodyColor: '#F8F9FA',
+        cornerRadius: 8,
+        displayColors: false,
+        callbacks: {
+          title: (items) => 'Week ending ' + items[0].label,
+          label: (item) => 'Fan Score: ' + item.raw,
+        }
+      }},
+      scales: {
+        x: { display: false },
+        y: { display: false, min: 0 }
+      }
+    }
+  });
+}
+
+// =========================================================================
+// CAROUSEL (Signage)
+// =========================================================================
+function startCarousel() {
+  if (carouselTimer) clearInterval(carouselTimer);
+  carouselTimer = setInterval(() => {
+    carouselIdx = (carouselIdx + 1) % TOTAL_PANELS;
+    for (let i = 0; i < TOTAL_PANELS; i++) {
+      const panel = document.getElementById('sig-panel-' + i);
+      if (panel) panel.classList.toggle('active', i === carouselIdx);
+    }
+  }, CAROUSEL_INTERVAL);
+}
+
+// =========================================================================
+// BOTTOM TEXT ROTATION (Signage)
+// =========================================================================
+let bottomTexts = ['Did we create a raving fan this week \u2014 and why?'];
+let bottomIdx = 0;
+let bottomTimer = null;
+
+function setupBottomTextRotation() {
+  const notes = state.scorecard
+    .filter(w => w.notes && w.notes.length > 0)
+    .map(w => w.notes);
+  bottomTexts = ['Did we create a raving fan this week \u2014 and why?', ...notes];
+
+  if (bottomTimer) clearInterval(bottomTimer);
+  if (bottomTexts.length > 1) {
+    bottomTimer = setInterval(() => {
+      bottomIdx = (bottomIdx + 1) % bottomTexts.length;
+      const el = document.getElementById('signage-bottom-text');
+      if (el) {
+        el.style.opacity = 0;
+        setTimeout(() => {
+          el.textContent = bottomTexts[bottomIdx];
+          el.style.opacity = 1;
+        }, 400);
+      }
+    }, 10000);
+  }
+}
+
+// =========================================================================
+// SIGNAGE CLOCK
+// =========================================================================
+function updateClock() {
+  const el = document.getElementById('signage-clock');
+  if (!el) return;
+  const now = new Date();
+  el.textContent = now.toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  }) + '  \u2022  ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+// =========================================================================
+// TABS
+// =========================================================================
+function setupTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.add('hidden'));
+      const target = document.getElementById('tab-' + btn.dataset.tab);
+      if (target) target.classList.remove('hidden');
+    });
+  });
+}
+
+// =========================================================================
+// REVIEW EXPAND/COLLAPSE
+// =========================================================================
+function toggleReview(idx, btn) {
+  const el = document.getElementById('review-text-' + idx);
+  if (!el || !window._reviewTexts) return;
+  const full = window._reviewTexts[idx];
+  if (btn.textContent === 'Show more') {
+    el.textContent = full;
+    btn.textContent = 'Show less';
+  } else {
+    el.textContent = full.slice(0, 150) + '...';
+    btn.textContent = 'Show more';
+  }
+}
+
+// =========================================================================
+// INIT
+// =========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  if (isSignage) {
+    document.getElementById('standard-view').style.display = 'none';
+    document.getElementById('signage-view').style.display = 'flex';
+    updateClock();
+    setInterval(updateClock, 1000);
+    startCarousel();
+  } else {
+    document.getElementById('standard-view').style.display = 'block';
+    document.getElementById('signage-view').style.display = 'none';
+    setupTabs();
+  }
+
+  // Initial fetch
+  fetchAllData();
+
+  // Auto-refresh every 90 seconds
+  setInterval(fetchAllData, REFRESH_INTERVAL);
+});
+</script>
+</body>
+</html>
