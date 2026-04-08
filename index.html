@@ -455,6 +455,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
 // CONFIG & STATE
 // =========================================================================
 const SHEET_ID = '10kdY3xtX7-OKT56Y89lad-s67fu-acvoUUOa8iAh_tI';
+const PUB_ID = '2PACX-1vRsQaH6Q29LCTAkbX_t8_yB3cTXLcXt9EUU9OEn8xE8vzla4j8ijx7Wb1exPNAuDUw79_EBil_N2Gfc';
 const SHEETS = {
   scorecard: { gid: 0, dataStartRow: 4 },
   reviews:   { gid: 1, dataStartRow: 4 },
@@ -479,7 +480,7 @@ let carouselIdx = 0, carouselTimer = null;
 // CSV FETCHING
 // =========================================================================
 function sheetURL(gid) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+  return `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv&gid=${gid}`;
 }
 
 function fetchCSV(gid) {
