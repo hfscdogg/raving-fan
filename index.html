@@ -638,11 +638,15 @@ function render() {
   document.getElementById('loading-msg')?.classList.add('hidden');
   document.getElementById('error-msg')?.classList.add('hidden');
 
+  // Find most recent week with any non-zero activity for KPI display
   const latest = state.scorecard[state.scorecard.length - 1];
+  const activeWeek = [...state.scorecard].reverse().find(w =>
+    w.reviews > 0 || w.mentions > 0 || w.referrals > 0 || w.repeat > 0
+  ) || latest;
   const refreshStr = new Date().toLocaleTimeString();
 
-  if (isSignage) renderSignage(latest, refreshStr);
-  else renderStandard(latest, refreshStr);
+  if (isSignage) renderSignage(activeWeek, refreshStr);
+  else renderStandard(activeWeek, refreshStr);
 }
 
 function renderStandard(latest, refreshStr) {
