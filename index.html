@@ -238,17 +238,31 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
     </div>
 
     <!-- Total Fan Score Banner -->
-    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6 flex flex-col md:flex-row items-center gap-6">
-      <div class="text-center md:text-left">
-        <div class="text-sm font-medium text-gray-500 mb-1">&#128293; Total Fan Score</div>
-        <div class="text-5xl font-extrabold font-display text-gold" id="fan-score-big">—</div>
-        <div class="text-sm text-gray-500 mt-1">
-          Trailing 30-day avg: <span class="font-semibold" id="fan-score-avg">8</span>
-          <span id="fan-score-trend" class="ml-1">&#9650;</span>
+    <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+      <div class="flex flex-col md:flex-row items-center gap-6">
+        <div class="text-center md:text-left md:min-w-[180px]">
+          <div class="text-sm font-medium text-gray-500 mb-1">&#128293; This Week's Fan Score</div>
+          <div class="text-5xl font-extrabold font-display text-gold" id="fan-score-big">—</div>
+          <div class="text-xs text-gray-400 mt-1" id="fan-score-week-label"></div>
+        </div>
+        <div class="flex-1 w-full" style="min-height:80px; max-height:100px;">
+          <canvas id="sparkline-std"></canvas>
         </div>
       </div>
-      <div class="flex-1 w-full" style="min-height:80px; max-height:100px;">
-        <canvas id="sparkline-std"></canvas>
+      <div class="mt-4 pt-4 border-t border-gray-100">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-medium text-gray-500">Trailing 30-Day Avg</span>
+          <span class="text-lg font-bold font-display" id="fan-score-avg">—</span>
+        </div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-gold" id="prog-fan-score"></div></div>
+        <div class="flex justify-between text-xs text-gray-400">
+          <span>Target: 10</span>
+          <span id="prog-fan-score-pct">—</span>
+        </div>
+        <div class="flex items-center gap-1 text-xs text-gray-400 mt-1">
+          <span>Trend:</span>
+          <span id="fan-score-trend" class="font-semibold"></span>
+        </div>
       </div>
     </div>
 
@@ -683,7 +697,31 @@ function renderStandard(qtd, activeWeek, trailingAvg, refreshStr) {
     setKPI('kpi-repeat', 'prog-repeat', 'prog-repeat-pct', qtd.repeat, TARGETS.repeat);
 
     document.getElementById('fan-score-big').textContent = activeWeek.fanScore;
+    document.getElementById('fan-score-week-label').textContent = 'Week ending ' + activeWeek.weekEnd;
+
+    // Trailing avg with progress toward target of 10
     document.getElementById('fan-score-avg').textContent = trailingAvg;
+    const FAN_TARGET = 10;
+    const fanPct = Math.min(100, Math.round((trailingAvg / FAN_TARGET) * 100));
+    setTimeout(() => {
+      document.getElementById('prog-fan-score').style.width = fanPct + '%';
+    }, 200);
+    document.getElementById('prog-fan-score-pct').textContent = fanPct + '%';
+
+    // Trend arrow: compare last 4 weeks avg to previous 4 weeks avg
+    const prev4 = state.scorecard.slice(-8, -4);
+    const prevAvg = prev4.length ? prev4.reduce((s, w) => s + w.fanScore, 0) / prev4.length : 0;
+    const trendEl = document.getElementById('fan-score-trend');
+    if (trailingAvg > prevAvg) {
+      trendEl.textContent = '\u25B2 Up';
+      trendEl.className = 'font-semibold text-green-600';
+    } else if (trailingAvg < prevAvg) {
+      trendEl.textContent = '\u25BC Down';
+      trendEl.className = 'font-semibold text-red-500';
+    } else {
+      trendEl.textContent = '\u25B6 Flat';
+      trendEl.className = 'font-semibold text-gray-500';
+    }
   }
 
   // Sparkline
