@@ -479,19 +479,48 @@ let carouselIdx = 0, carouselTimer = null;
 // =========================================================================
 // CSV FETCHING
 // =========================================================================
-function sheetURL(gid) {
-  return `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv&gid=${gid}`;
+// Try multiple URL formats — published, gviz, and export
+function sheetURLs(gid) {
+  return [
+    `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv&gid=${gid}`,
+    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}`,
+    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`,
+  ];
 }
 
 function fetchCSV(gid) {
-  return new Promise((resolve) => {
-    Papa.parse(sheetURL(gid), {
-      download: true,
-      skipEmptyLines: true,
-      complete: (results) => resolve(results.data),
-      error: () => resolve(null)
+  const urls = sheetURLs(gid);
+  let attempt = 0;
+
+  function tryNext() {
+    if (attempt >= urls.length) {
+      console.warn('[RavingFan] All CSV URL formats failed for gid=' + gid);
+      return Promise.resolve(null);
+    }
+    const url = urls[attempt++];
+    console.log('[RavingFan] Trying gid=' + gid + ' url=' + url);
+    return new Promise((resolve) => {
+      Papa.parse(url, {
+        download: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.data && results.data.length > 1) {
+            console.log('[RavingFan] Success gid=' + gid + ' rows=' + results.data.length);
+            resolve(results.data);
+          } else {
+            console.warn('[RavingFan] Empty result for gid=' + gid + ', trying next URL');
+            tryNext().then(resolve);
+          }
+        },
+        error: (err) => {
+          console.warn('[RavingFan] Error for gid=' + gid + ':', err);
+          tryNext().then(resolve);
+        }
+      });
     });
-  });
+  }
+
+  return tryNext();
 }
 
 async function fetchAllData() {
