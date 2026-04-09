@@ -670,6 +670,31 @@ function render() {
   };
   qtd.fanScore = qtd.reviews + qtd.mentions + qtd.referrals + qtd.repeat;
 
+  // If current quarter has minimal activity (< 5 total), fall back to previous quarter
+  let displayQtd = qtd;
+  let qNum = Math.floor(now.getMonth() / 3) + 1;
+  let qYear = now.getFullYear();
+  if (qtd.fanScore < 5) {
+    const prevQMonth = qMonth - 3 < 0 ? 9 : qMonth - 3;
+    const prevQYear = qMonth - 3 < 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const prevQStart = new Date(prevQYear, prevQMonth, 1);
+    const prevQWeeks = state.scorecard.filter(w => {
+      const d = new Date(w.weekEnd);
+      return d >= prevQStart && d < qStart;
+    });
+    if (prevQWeeks.length > 0) {
+      displayQtd = {
+        reviews: prevQWeeks.reduce((s, w) => s + w.reviews, 0),
+        mentions: prevQWeeks.reduce((s, w) => s + w.mentions, 0),
+        referrals: prevQWeeks.reduce((s, w) => s + w.referrals, 0),
+        repeat: prevQWeeks.reduce((s, w) => s + w.repeat, 0),
+      };
+      displayQtd.fanScore = displayQtd.reviews + displayQtd.mentions + displayQtd.referrals + displayQtd.repeat;
+      qNum = Math.floor(prevQMonth / 3) + 1;
+      qYear = prevQYear;
+    }
+  }
+
   // Most recent week with activity for the Fan Score banner
   const activeWeek = [...state.scorecard].reverse().find(w =>
     w.reviews > 0 || w.mentions > 0 || w.referrals > 0 || w.repeat > 0
@@ -681,13 +706,13 @@ function render() {
 
   const refreshStr = new Date().toLocaleTimeString();
 
-  if (isSignage) renderSignage(qtd, activeWeek, trailingAvg, refreshStr);
-  else renderStandard(qtd, activeWeek, trailingAvg, refreshStr);
+  const qLabel = 'Q' + qNum + ' ' + qYear;
+  if (isSignage) renderSignage(displayQtd, activeWeek, trailingAvg, refreshStr, qLabel);
+  else renderStandard(displayQtd, activeWeek, trailingAvg, refreshStr, qLabel);
 }
 
-function renderStandard(qtd, activeWeek, trailingAvg, refreshStr) {
+function renderStandard(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
   if (activeWeek) {
-    const qLabel = 'Q' + (Math.floor(new Date().getMonth() / 3) + 1) + ' ' + new Date().getFullYear();
     document.getElementById('std-week-label').textContent = qLabel + ' Quarter to Date';
     document.getElementById('std-refresh-time').textContent = 'Last refreshed: ' + refreshStr;
 
@@ -836,7 +861,7 @@ function renderRepeatTable() {
 // =========================================================================
 // SIGNAGE RENDER
 // =========================================================================
-function renderSignage(qtd, activeWeek, trailingAvg, refreshStr) {
+function renderSignage(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
   if (activeWeek) {
     document.getElementById('signage-fan-score').textContent = activeWeek.fanScore;
     document.getElementById('signage-avg').textContent = trailingAvg;
