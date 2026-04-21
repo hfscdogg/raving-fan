@@ -186,6 +186,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
 
   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
     <!-- KPI Hero Row -->
+    <h2 class="text-lg font-bold font-display text-navy mb-3" id="kpi-section-header">Quarterly Progress</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="kpi-row">
       <div class="kpi-card">
         <div class="flex items-center justify-between mb-1">
@@ -715,6 +716,7 @@ function renderStandard(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
   if (activeWeek) {
     document.getElementById('std-week-label').textContent = qLabel + ' Quarter to Date';
     document.getElementById('std-refresh-time').textContent = 'Last refreshed: ' + refreshStr;
+    document.getElementById('kpi-section-header').textContent = qLabel + ' Quarterly Progress';
 
     setKPI('kpi-reviews', 'prog-reviews', 'prog-reviews-pct', qtd.reviews, TARGETS.reviews);
     setKPI('kpi-mentions', 'prog-mentions', 'prog-mentions-pct', qtd.mentions, TARGETS.mentions);
