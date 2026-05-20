@@ -84,13 +84,13 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
 .progress-bar-bg {
   background: #E5E7EB;
   border-radius: 999px;
-  height: 8px;
+  height: 12px;
   overflow: hidden;
 }
 .progress-bar-fill {
   height: 100%;
   border-radius: 999px;
-  transition: width 1.2s ease;
+  transition: width 1.2s ease, background-color 0.3s ease;
   width: 0;
 }
 
@@ -778,34 +778,35 @@ function setKPI(valId, barId, pctId, value, target) {
   valEl.textContent = value;
   pctEl.textContent = pct + '%';
 
-  // Color the progress bar: red < 50%, yellow 50-99%, green 100%
-  barEl.className = 'progress-bar-fill';
+  // Color thresholds
+  const COLOR_RED = '#EF4444';
+  const COLOR_AMBER = '#F59E0B';
+  const COLOR_GREEN = '#10B981';
+  let barColor, textColor;
   if (hit) {
-    barEl.classList.add('bg-green-500');
+    barColor = COLOR_GREEN;
+    textColor = COLOR_GREEN;
   } else if (pct >= 50) {
-    barEl.classList.add('bg-amber-400');
+    barColor = COLOR_AMBER;
+    textColor = '#D97706';
   } else {
-    barEl.classList.add('bg-red-400');
+    barColor = COLOR_RED;
+    textColor = COLOR_RED;
   }
 
+  // Apply progress bar color and width
+  barEl.style.backgroundColor = barColor;
   setTimeout(() => { barEl.style.width = pct + '%'; }, 200);
 
-  // Color the value text to match
-  valEl.classList.remove('text-navy', 'text-green-600', 'text-amber-500', 'text-red-500');
-  if (hit) {
-    valEl.classList.add('text-green-600');
-  } else if (pct >= 50) {
-    valEl.classList.add('text-amber-500');
-  } else {
-    valEl.classList.add('text-red-500');
-  }
+  // Apply value text color
+  valEl.style.color = textColor;
 
   // Celebration badge when target is met
   const existingBadge = card.querySelector('.goal-badge');
   if (existingBadge) existingBadge.remove();
   if (hit) {
-    card.style.borderColor = '#10B981';
-    card.style.boxShadow = '0 0 0 1px #10B981, 0 4px 12px rgba(16,185,129,0.15)';
+    card.style.borderColor = COLOR_GREEN;
+    card.style.boxShadow = '0 0 0 2px ' + COLOR_GREEN + ', 0 4px 16px rgba(16,185,129,0.2)';
     const badge = document.createElement('div');
     badge.className = 'goal-badge';
     badge.innerHTML = '<span style="font-size:1.5rem;">&#127881;</span> <span style="font-size:0.75rem;font-weight:700;color:#10B981;vertical-align:middle;">GOAL HIT!</span>';
