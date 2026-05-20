@@ -193,7 +193,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
           <span class="text-sm font-medium text-gray-500">&#11088; 5-Star Reviews</span>
           <span class="text-2xl font-bold font-display text-navy" id="kpi-reviews">—</span>
         </div>
-        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-reviews"></div></div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-reviews"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
           <span>Target: 24</span>
           <span id="prog-reviews-pct">—</span>
@@ -205,7 +205,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
           <span class="text-sm font-medium text-gray-500">&#128100; Staff Mentions</span>
           <span class="text-2xl font-bold font-display text-navy" id="kpi-mentions">—</span>
         </div>
-        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-mentions"></div></div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-mentions"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
           <span>Target: 13</span>
           <span id="prog-mentions-pct">—</span>
@@ -217,7 +217,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
           <span class="text-sm font-medium text-gray-500">&#128257; Referred Leads</span>
           <span class="text-2xl font-bold font-display text-navy" id="kpi-referrals">—</span>
         </div>
-        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-referrals"></div></div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-referrals"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
           <span>Target: 60</span>
           <span id="prog-referrals-pct">—</span>
@@ -229,7 +229,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
           <span class="text-sm font-medium text-gray-500">&#9851;&#65039; Repeat Clients</span>
           <span class="text-2xl font-bold font-display text-navy" id="kpi-repeat">—</span>
         </div>
-        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-electric" id="prog-repeat"></div></div>
+        <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-repeat"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
           <span>Target: 24</span>
           <span id="prog-repeat-pct">—</span>
@@ -768,12 +768,53 @@ function renderStandard(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
 }
 
 function setKPI(valId, barId, pctId, value, target) {
-  document.getElementById(valId).textContent = value;
+  const valEl = document.getElementById(valId);
+  const barEl = document.getElementById(barId);
+  const pctEl = document.getElementById(pctId);
+  const card = valEl.closest('.kpi-card');
   const pct = Math.min(100, Math.round((value / target) * 100));
-  setTimeout(() => {
-    document.getElementById(barId).style.width = pct + '%';
-  }, 200);
-  document.getElementById(pctId).textContent = pct + '%';
+  const hit = value >= target;
+
+  valEl.textContent = value;
+  pctEl.textContent = pct + '%';
+
+  // Color the progress bar: red < 50%, yellow 50-99%, green 100%
+  barEl.className = 'progress-bar-fill';
+  if (hit) {
+    barEl.classList.add('bg-green-500');
+  } else if (pct >= 50) {
+    barEl.classList.add('bg-amber-400');
+  } else {
+    barEl.classList.add('bg-red-400');
+  }
+
+  setTimeout(() => { barEl.style.width = pct + '%'; }, 200);
+
+  // Color the value text to match
+  valEl.classList.remove('text-navy', 'text-green-600', 'text-amber-500', 'text-red-500');
+  if (hit) {
+    valEl.classList.add('text-green-600');
+  } else if (pct >= 50) {
+    valEl.classList.add('text-amber-500');
+  } else {
+    valEl.classList.add('text-red-500');
+  }
+
+  // Celebration badge when target is met
+  const existingBadge = card.querySelector('.goal-badge');
+  if (existingBadge) existingBadge.remove();
+  if (hit) {
+    card.style.borderColor = '#10B981';
+    card.style.boxShadow = '0 0 0 1px #10B981, 0 4px 12px rgba(16,185,129,0.15)';
+    const badge = document.createElement('div');
+    badge.className = 'goal-badge';
+    badge.innerHTML = '<span style="font-size:1.5rem;">&#127881;</span> <span style="font-size:0.75rem;font-weight:700;color:#10B981;vertical-align:middle;">GOAL HIT!</span>';
+    badge.style.cssText = 'text-align:center;margin-top:0.5rem;animation:fadeInUp 0.5s ease forwards;';
+    card.appendChild(badge);
+  } else {
+    card.style.borderColor = '';
+    card.style.boxShadow = '';
+  }
 }
 
 function fanScoreClass(score) {
