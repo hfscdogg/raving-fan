@@ -3,10 +3,18 @@
   RAVING FAN DASHBOARD — Livewire
   =========================================================================
   Data Source: Google Sheets ID 10kdY3xtX7-OKT56Y89lad-s67fu-acvoUUOa8iAh_tI
-  
+
   SETUP:
   1. Make the Google Sheet publicly accessible:
      Share > Anyone with the link > Viewer
+  NOTES:
+  - Tabs are fetched by NAME (see TABS config), so re-ordering or re-creating
+    tabs in the sheet won't break the dashboard. Columns are matched by their
+    header text, so adding/moving columns is safe too.
+  - Historical scorecard tabs (e.g. "Q1 & Q2 2026") are listed in HISTORY_TABS
+    and merged into the trend line / trailing averages automatically.
+  - Quarterly targets and metric champions are read from the TARGETS and
+    METRIC CHAMPIONS sections of the Scorecard tab on every refresh.
   2. Standard view: Open this file in any browser
   3. Signage view (TV lobby): Append ?view=signage to the URL
   4. Kiosk mode tip: Use F11 for fullscreen, or launch Chrome with
@@ -195,10 +203,10 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
         </div>
         <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-reviews"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
-          <span>Target: 24</span>
+          <span id="target-reviews">Target: —</span>
           <span id="prog-reviews-pct">—</span>
         </div>
-        <div class="text-xs text-gray-400 mt-1">Champion: Ben Dalton</div>
+        <div class="text-xs text-gray-400 mt-1" id="champ-reviews">Champion: —</div>
       </div>
       <div class="kpi-card">
         <div class="flex items-center justify-between mb-1">
@@ -207,10 +215,10 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
         </div>
         <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-mentions"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
-          <span>Target: 13</span>
+          <span id="target-mentions">Target: —</span>
           <span id="prog-mentions-pct">—</span>
         </div>
-        <div class="text-xs text-gray-400 mt-1">Champion: Ben Dalton</div>
+        <div class="text-xs text-gray-400 mt-1" id="champ-mentions">Champion: —</div>
       </div>
       <div class="kpi-card">
         <div class="flex items-center justify-between mb-1">
@@ -219,10 +227,10 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
         </div>
         <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-referrals"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
-          <span>Target: 60</span>
+          <span id="target-referrals">Target: —</span>
           <span id="prog-referrals-pct">—</span>
         </div>
-        <div class="text-xs text-gray-400 mt-1">Champion: Dustin Roskam</div>
+        <div class="text-xs text-gray-400 mt-1" id="champ-referrals">Champion: —</div>
       </div>
       <div class="kpi-card">
         <div class="flex items-center justify-between mb-1">
@@ -231,10 +239,10 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
         </div>
         <div class="progress-bar-bg mb-2"><div class="progress-bar-fill" id="prog-repeat"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
-          <span>Target: 24</span>
+          <span id="target-repeat">Target: —</span>
           <span id="prog-repeat-pct">—</span>
         </div>
-        <div class="text-xs text-gray-400 mt-1">Champion: Brian Mosier</div>
+        <div class="text-xs text-gray-400 mt-1" id="champ-repeat">Champion: —</div>
       </div>
     </div>
 
@@ -257,7 +265,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
         </div>
         <div class="progress-bar-bg mb-2"><div class="progress-bar-fill bg-gold" id="prog-fan-score"></div></div>
         <div class="flex justify-between text-xs text-gray-400">
-          <span>Target: 10</span>
+          <span id="target-fan">Target: —</span>
           <span id="prog-fan-score-pct">—</span>
         </div>
         <div class="flex items-center gap-1 text-xs text-gray-400 mt-1">
@@ -374,25 +382,25 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
             <div class="text-sm text-gray-400">&#11088; 5-Star Reviews</div>
             <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-reviews">—</div>
             <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-reviews"></div></div>
-            <div class="text-xs text-gray-500 mt-1">Target: 24</div>
+            <div class="text-xs text-gray-500 mt-1" id="sig-target-reviews">Target: —</div>
           </div>
           <div class="signage-kpi-card">
             <div class="text-sm text-gray-400">&#128100; Staff Mentions</div>
             <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-mentions">—</div>
             <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-mentions"></div></div>
-            <div class="text-xs text-gray-500 mt-1">Target: 13</div>
+            <div class="text-xs text-gray-500 mt-1" id="sig-target-mentions">Target: —</div>
           </div>
           <div class="signage-kpi-card">
             <div class="text-sm text-gray-400">&#128257; Referred Leads</div>
             <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-referrals">—</div>
             <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-referrals"></div></div>
-            <div class="text-xs text-gray-500 mt-1">Target: 60</div>
+            <div class="text-xs text-gray-500 mt-1" id="sig-target-referrals">Target: —</div>
           </div>
           <div class="signage-kpi-card">
             <div class="text-sm text-gray-400">&#9851;&#65039; Repeat Clients</div>
             <div class="text-4xl font-bold font-display text-white mt-1" id="sig-kpi-repeat">—</div>
             <div class="signage-progress-bg mt-3"><div class="signage-progress-fill bg-electric" id="sig-prog-repeat"></div></div>
-            <div class="text-xs text-gray-500 mt-1">Target: 24</div>
+            <div class="text-xs text-gray-500 mt-1" id="sig-target-repeat">Target: —</div>
           </div>
         </div>
       </div>
@@ -432,32 +440,10 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
         <h2 class="text-xl font-bold font-display text-white mb-6">&#9851;&#65039; Top Repeat Clients</h2>
         <div class="space-y-4" id="sig-top-repeat"></div>
       </div>
-      <!-- Panel 6: Champions -->
+      <!-- Panel 6: Champions (rendered from the METRIC CHAMPIONS section of the sheet) -->
       <div class="carousel-panel" id="sig-panel-5">
         <h2 class="text-xl font-bold font-display text-gold mb-6">&#127942; Metric Champions</h2>
-        <div class="space-y-4">
-          <div class="signage-kpi-card flex items-center gap-4">
-            <div class="text-3xl">&#11088;</div>
-            <div>
-              <div class="text-white font-bold text-lg">Ben Dalton</div>
-              <div class="text-gray-400 text-sm">Google Reviews + Staff Mentions</div>
-            </div>
-          </div>
-          <div class="signage-kpi-card flex items-center gap-4">
-            <div class="text-3xl">&#128257;</div>
-            <div>
-              <div class="text-white font-bold text-lg">Dustin Roskam</div>
-              <div class="text-gray-400 text-sm">Referred Leads</div>
-            </div>
-          </div>
-          <div class="signage-kpi-card flex items-center gap-4">
-            <div class="text-3xl">&#9851;&#65039;</div>
-            <div>
-              <div class="text-white font-bold text-lg">Brian Mosier</div>
-              <div class="text-gray-400 text-sm">Repeat Clients</div>
-            </div>
-          </div>
-        </div>
+        <div class="space-y-4" id="sig-champions"></div>
       </div>
     </div>
   </div>
@@ -471,64 +457,92 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
 // =========================================================================
 const SHEET_ID = '10kdY3xtX7-OKT56Y89lad-s67fu-acvoUUOa8iAh_tI';
 const PUB_ID = '2PACX-1vRsQaH6Q29LCTAkbX_t8_yB3cTXLcXt9EUU9OEn8xE8vzla4j8ijx7Wb1exPNAuDUw79_EBil_N2Gfc';
-const SHEETS = {
-  scorecard: { gid: 0, dataStartRow: 4 },
-  reviews:   { gid: 1, dataStartRow: 4 },
-  referrals: { gid: 2, dataStartRow: 1 },
-  repeat:    { gid: 3, dataStartRow: 1 },
+// Tabs are resolved by NAME first (survives tab re-creation / re-ordering);
+// gid is kept only as a fallback for the original four tabs.
+const TABS = {
+  scorecard: { name: 'Scorecard', gid: 0 },
+  reviews:   { name: 'Reviews', gid: 1 },
+  referrals: { name: 'Referrals', gid: 2 },
+  repeat:    { name: 'Repeat Clients', gid: 3 },
 };
-const TARGETS = { reviews: 24, mentions: 13, referrals: 60, repeat: 24 };
+// Archived scorecard tabs — merged into the trend line, trailing averages and
+// the Weekly Scorecard table. Add a tab name here each time a quarter is archived.
+const HISTORY_TABS = ['Q1 & Q2 2026'];
+// Fallbacks only — live values are read from the TARGETS / METRIC CHAMPIONS
+// sections of the Scorecard tab on every refresh.
+const TARGETS = { reviews: 26, mentions: 15, referrals: 72, repeat: 75 };
+const FAN_WEEKLY_TARGET = 12.5;
 const CHAMPIONS = {
   reviews: 'Ben Dalton', mentions: 'Ben Dalton',
-  referrals: 'Dustin Roskam', repeat: 'Brian Mosier'
+  referrals: 'Dustin Roskam', repeat: 'Stacy Hicks'
+};
+const METRIC_META = {
+  reviews:   { emoji: '⭐', label: 'Google Reviews' },
+  mentions:  { emoji: '👤', label: 'Staff Mentions' },
+  referrals: { emoji: '🔁', label: 'Referred Leads' },
+  repeat:    { emoji: '♻️', label: 'Repeat Clients' },
 };
 const REFRESH_INTERVAL = 90000;
 const CAROUSEL_INTERVAL = 8000;
 const TOTAL_PANELS = 6;
 
 const isSignage = new URLSearchParams(window.location.search).get('view') === 'signage';
-let state = { scorecard: [], reviews: [], referrals: [], repeat: [], loaded: false };
+let state = {
+  scorecard: [], reviews: [], referrals: [], repeat: [], loaded: false,
+  targets: Object.assign({}, TARGETS),
+  fanTarget: FAN_WEEKLY_TARGET,
+  champions: Object.assign({}, CHAMPIONS),
+};
 let sparkChartStd = null, sparkChartSig = null;
 let carouselIdx = 0, carouselTimer = null;
 
 // =========================================================================
 // CSV FETCHING
 // =========================================================================
-// Try multiple URL formats — published, gviz, and export
-function sheetURLs(gid) {
-  return [
-    `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv&gid=${gid}`,
-    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}`,
-    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`,
-  ];
+// Try multiple URL formats — gviz by tab name first (immune to gid changes),
+// then published / gviz / export by gid as fallbacks.
+function sheetURLs(tab) {
+  const urls = [];
+  if (tab.name) {
+    urls.push(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab.name)}`);
+  }
+  if (tab.gid !== null && tab.gid !== undefined) {
+    urls.push(
+      `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv&gid=${tab.gid}`,
+      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${tab.gid}`,
+      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${tab.gid}`,
+    );
+  }
+  return urls;
 }
 
-function fetchCSV(gid) {
-  const urls = sheetURLs(gid);
+function fetchCSV(tab) {
+  const urls = sheetURLs(tab);
+  const label = tab.name || ('gid=' + tab.gid);
   let attempt = 0;
 
   function tryNext() {
     if (attempt >= urls.length) {
-      console.warn('[RavingFan] All CSV URL formats failed for gid=' + gid);
+      console.warn('[RavingFan] All CSV URL formats failed for tab ' + label);
       return Promise.resolve(null);
     }
     const url = urls[attempt++];
-    console.log('[RavingFan] Trying gid=' + gid + ' url=' + url);
+    console.log('[RavingFan] Trying tab=' + label + ' url=' + url);
     return new Promise((resolve) => {
       Papa.parse(url, {
         download: true,
         skipEmptyLines: true,
         complete: (results) => {
           if (results.data && results.data.length > 1) {
-            console.log('[RavingFan] Success gid=' + gid + ' rows=' + results.data.length);
+            console.log('[RavingFan] Success tab=' + label + ' rows=' + results.data.length);
             resolve(results.data);
           } else {
-            console.warn('[RavingFan] Empty result for gid=' + gid + ', trying next URL');
+            console.warn('[RavingFan] Empty result for tab=' + label + ', trying next URL');
             tryNext().then(resolve);
           }
         },
         error: (err) => {
-          console.warn('[RavingFan] Error for gid=' + gid + ':', err);
+          console.warn('[RavingFan] Error for tab=' + label + ':', err);
           tryNext().then(resolve);
         }
       });
@@ -539,18 +553,44 @@ function fetchCSV(gid) {
 }
 
 async function fetchAllData() {
-  const [sc, rv, rf, rp] = await Promise.all([
-    fetchCSV(SHEETS.scorecard.gid),
-    fetchCSV(SHEETS.reviews.gid),
-    fetchCSV(SHEETS.referrals.gid),
-    fetchCSV(SHEETS.repeat.gid),
+  const [sc, rv, rf, rp, ...hist] = await Promise.all([
+    fetchCSV(TABS.scorecard),
+    fetchCSV(TABS.reviews),
+    fetchCSV(TABS.referrals),
+    fetchCSV(TABS.repeat),
+    ...HISTORY_TABS.map(name => fetchCSV({ name })),
   ]);
 
   let anyLoaded = false;
+  let currentWeeks = [];
+  let histWeeks = [];
 
   if (sc) {
-    state.scorecard = parseScorecard(sc);
+    currentWeeks = parseScorecard(sc);
+    state.champions = Object.assign({}, CHAMPIONS, parseChampions(sc));
+    const t = parseTargets(sc);
+    state.targets = Object.assign({}, TARGETS, t.targets);
+    state.fanTarget = t.fanWeekly || FAN_WEEKLY_TARGET;
     anyLoaded = true;
+  }
+  hist.forEach(h => {
+    if (h) {
+      histWeeks = histWeeks.concat(parseScorecard(h));
+      anyLoaded = true;
+    }
+  });
+  if (sc || histWeeks.length) {
+    // Merge archived quarters with the current tab, dedupe by week-ending
+    // date, oldest first (rendering assumes chronological order).
+    const seen = new Set();
+    state.scorecard = histWeeks.concat(currentWeeks)
+      .filter(w => {
+        const k = new Date(w.weekEnd).getTime();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .sort((a, b) => new Date(a.weekEnd) - new Date(b.weekEnd));
   }
   if (rv) {
     state.reviews = parseReviews(rv);
@@ -577,37 +617,127 @@ async function fetchAllData() {
 // =========================================================================
 // PARSERS
 // =========================================================================
+// Columns are located by header text, not position, so inserting or moving
+// columns in the sheet (e.g. the Q3 additions to Referrals / Repeat Clients)
+// doesn't silently shift the data.
+const DATE_RE = /^\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}$/;
+
+function cellText(r, idx) {
+  if (idx === undefined || idx < 0) return '';
+  return String(r[idx] ?? '').trim();
+}
+
+function findHeaderRow(rows, required) {
+  for (let i = 0; i < rows.length; i++) {
+    const cells = (rows[i] || []).map(c => String(c || '').toLowerCase());
+    if (required.every(h => cells.some(c => c.includes(h)))) return i;
+  }
+  return -1;
+}
+
+function mapColumns(headerRow, spec) {
+  const cells = (headerRow || []).map(c => String(c || '').toLowerCase());
+  const cols = {};
+  for (const key in spec) cols[key] = cells.findIndex(c => c.includes(spec[key]));
+  return cols;
+}
+
+function metricKey(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.includes('5-star')) return 'reviews';
+  if (n.includes('mentioning staff')) return 'mentions';
+  if (n.includes('referred leads')) return 'referrals';
+  if (n.includes('repeat clients')) return 'repeat';
+  if (n.includes('total fan score')) return 'fanScore';
+  return null;
+}
+
 function parseScorecard(rows) {
   const data = [];
-  for (let i = SHEETS.scorecard.dataStartRow; i < rows.length; i++) {
+  const hIdx = findHeaderRow(rows, ['week ending', 'total fan score']);
+  if (hIdx < 0) return data;
+  const col = mapColumns(rows[hIdx], {
+    weekBegin: 'week beginning', weekEnd: 'week ending', reviews: '5-star',
+    mentions: 'mentioning staff', referrals: 'referred leads',
+    repeat: 'repeat clients', fanScore: 'total fan score', notes: 'notes'
+  });
+  for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || !r[0] || !r[1]) continue;
-    const weekEnd = r[1]?.trim();
-    const reviews = parseInt(r[2]) || 0;
-    const mentions = parseInt(r[3]) || 0;
-    const referrals = parseInt(r[4]) || 0;
-    const repeat = parseInt(r[5]) || 0;
-    const csvFanScore = parseInt(r[6]) || 0;
+    if (!r) continue;
+    const weekEnd = cellText(r, col.weekEnd);
+    // Only rows whose Week Ending cell is an actual date are scorecard weeks;
+    // this skips the METRIC CHAMPIONS / TARGETS sections lower in the tab.
+    if (!DATE_RE.test(weekEnd)) continue;
+    const reviews = parseInt(cellText(r, col.reviews)) || 0;
+    const mentions = parseInt(cellText(r, col.mentions)) || 0;
+    const referrals = parseInt(cellText(r, col.referrals)) || 0;
+    const repeat = parseInt(cellText(r, col.repeat)) || 0;
+    const csvFanScore = parseInt(cellText(r, col.fanScore)) || 0;
     const fanScore = csvFanScore > 0 ? csvFanScore : (reviews + mentions + referrals + repeat);
-    const notes = (r[7] || '').trim();
-    if (!weekEnd || weekEnd.length < 4) continue;
-    data.push({ weekBegin: r[0]?.trim(), weekEnd, reviews, mentions, referrals, repeat, fanScore, notes });
+    const notes = cellText(r, col.notes);
+    data.push({ weekBegin: cellText(r, col.weekBegin), weekEnd, reviews, mentions, referrals, repeat, fanScore, notes });
   }
   return data;
 }
 
-function parseReviews(rows) {
-  const data = [];
-  for (let i = SHEETS.reviews.dataStartRow; i < rows.length; i++) {
+function parseChampions(rows) {
+  const out = {};
+  const start = rows.findIndex(r => String(r?.[0] || '').toLowerCase().includes('metric champions'));
+  if (start < 0) return out;
+  for (let i = start + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) continue;
+    const c0 = String(r[0] || '').toLowerCase();
+    // Stop at the next section so TARGETS rows don't overwrite champions
+    if (c0.includes('performance tracking') || c0.includes('targets')) break;
+    const key = metricKey(r[0]);
+    const champ = cellText(r, 1);
+    if (key && key !== 'fanScore' && champ && !/^[\d.]+$/.test(champ)) out[key] = champ;
+  }
+  return out;
+}
+
+function parseTargets(rows) {
+  const out = { targets: {}, fanWeekly: null };
+  const hIdx = rows.findIndex(r => (r || []).some(c => String(c || '').toLowerCase().includes('quarterly target')));
+  if (hIdx < 0) return out;
+  const tCol = rows[hIdx].findIndex(c => String(c || '').toLowerCase().includes('quarterly target'));
+  for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r || !r[0]) continue;
+    const key = metricKey(r[0]);
+    if (!key) break; // past the end of the TARGETS table
+    const val = parseFloat(cellText(r, tCol).replace(/,/g, ''));
+    if (key === 'fanScore') {
+      // Weekly pace lives in the Owner Notes cell, e.g. "12.5 weekly"
+      const m = r.join(' ').match(/([\d.]+)\s*(?:per week|weekly)/i);
+      if (m) out.fanWeekly = parseFloat(m[1]);
+      else if (val) out.fanWeekly = Math.round((val / 15) * 10) / 10;
+    } else if (val) {
+      out.targets[key] = val;
+    }
+  }
+  return out;
+}
+
+function parseReviews(rows) {
+  const data = [];
+  const hIdx = findHeaderRow(rows, ['first name', 'rating']);
+  if (hIdx < 0) return data;
+  const col = mapColumns(rows[hIdx], {
+    firstName: 'first name', lastName: 'last name', rating: 'rating',
+    text: 'review', named: 'named', date: 'date'
+  });
+  for (let i = hIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !cellText(r, col.firstName)) continue;
     data.push({
-      firstName: (r[0] || '').trim(),
-      lastName: (r[1] || '').trim(),
-      rating: parseInt(r[2]) || 5,
-      text: (r[3] || '').trim(),
-      named: (r[4] || '').trim(),
-      date: (r[5] || '').trim()
+      firstName: cellText(r, col.firstName),
+      lastName: cellText(r, col.lastName),
+      rating: parseInt(cellText(r, col.rating)) || 5,
+      text: cellText(r, col.text),
+      named: cellText(r, col.named),
+      date: cellText(r, col.date)
     });
   }
   return data;
@@ -615,16 +745,22 @@ function parseReviews(rows) {
 
 function parseReferrals(rows) {
   const data = [];
-  for (let i = SHEETS.referrals.dataStartRow; i < rows.length; i++) {
+  const hIdx = findHeaderRow(rows, ['potential name', 'referred by']);
+  if (hIdx < 0) return data;
+  const col = mapColumns(rows[hIdx], {
+    name: 'potential name', amount: 'amount', referral: 'referral',
+    referredBy: 'referred by', stage: 'stage', createdTime: 'created time'
+  });
+  for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || !r[0]) continue;
+    if (!r || !cellText(r, col.name)) continue;
     data.push({
-      name: (r[0] || '').trim(),
-      amount: (r[1] || '').trim(),
-      referral: (r[2] || '').trim(),
-      referredBy: (r[3] || '').trim(),
-      stage: (r[4] || '').trim(),
-      createdTime: (r[5] || '').trim()
+      name: cellText(r, col.name),
+      amount: cellText(r, col.amount),
+      referral: cellText(r, col.referral),
+      referredBy: cellText(r, col.referredBy),
+      stage: cellText(r, col.stage),
+      createdTime: cellText(r, col.createdTime)
     });
   }
   return data;
@@ -632,16 +768,22 @@ function parseReferrals(rows) {
 
 function parseRepeatClients(rows) {
   const data = [];
-  for (let i = SHEETS.repeat.dataStartRow; i < rows.length; i++) {
+  const hIdx = findHeaderRow(rows, ['potential name', 'closing date']);
+  if (hIdx < 0) return data;
+  const col = mapColumns(rows[hIdx], {
+    name: 'potential name', stage: 'stage', closingDate: 'closing date',
+    servicePlan: 'service plan', amount: 'amount', gm: 'gm%'
+  });
+  for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || !r[0]) continue;
+    if (!r || !cellText(r, col.name)) continue;
     data.push({
-      name: (r[0] || '').trim(),
-      stage: (r[1] || '').trim(),
-      closingDate: (r[2] || '').trim(),
-      servicePlan: (r[3] || '').trim(),
-      amount: (r[4] || '').trim(),
-      gm: (r[5] || '').trim()
+      name: cellText(r, col.name),
+      stage: cellText(r, col.stage),
+      closingDate: cellText(r, col.closingDate),
+      servicePlan: cellText(r, col.servicePlan),
+      amount: cellText(r, col.amount),
+      gm: cellText(r, col.gm)
     });
   }
   return data;
@@ -718,17 +860,25 @@ function renderStandard(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
     document.getElementById('std-refresh-time').textContent = 'Last refreshed: ' + refreshStr;
     document.getElementById('kpi-section-header').textContent = qLabel + ' Quarterly Progress';
 
-    setKPI('kpi-reviews', 'prog-reviews', 'prog-reviews-pct', qtd.reviews, TARGETS.reviews);
-    setKPI('kpi-mentions', 'prog-mentions', 'prog-mentions-pct', qtd.mentions, TARGETS.mentions);
-    setKPI('kpi-referrals', 'prog-referrals', 'prog-referrals-pct', qtd.referrals, TARGETS.referrals);
-    setKPI('kpi-repeat', 'prog-repeat', 'prog-repeat-pct', qtd.repeat, TARGETS.repeat);
+    setKPI('kpi-reviews', 'prog-reviews', 'prog-reviews-pct', qtd.reviews, state.targets.reviews);
+    setKPI('kpi-mentions', 'prog-mentions', 'prog-mentions-pct', qtd.mentions, state.targets.mentions);
+    setKPI('kpi-referrals', 'prog-referrals', 'prog-referrals-pct', qtd.referrals, state.targets.referrals);
+    setKPI('kpi-repeat', 'prog-repeat', 'prog-repeat-pct', qtd.repeat, state.targets.repeat);
+
+    ['reviews', 'mentions', 'referrals', 'repeat'].forEach(k => {
+      const targetEl = document.getElementById('target-' + k);
+      if (targetEl) targetEl.textContent = 'Target: ' + state.targets[k];
+      const champEl = document.getElementById('champ-' + k);
+      if (champEl) champEl.textContent = 'Champion: ' + state.champions[k];
+    });
 
     document.getElementById('fan-score-big').textContent = activeWeek.fanScore;
     document.getElementById('fan-score-week-label').textContent = 'Week ending ' + activeWeek.weekEnd;
 
-    // Trailing avg with progress toward target of 10
+    // Trailing avg with progress toward the weekly fan score target
     document.getElementById('fan-score-avg').textContent = trailingAvg;
-    const FAN_TARGET = 10;
+    const FAN_TARGET = state.fanTarget;
+    document.getElementById('target-fan').textContent = 'Target: ' + FAN_TARGET;
     const fanPct = Math.min(100, Math.round((trailingAvg / FAN_TARGET) * 100));
     setTimeout(() => {
       document.getElementById('prog-fan-score').style.width = fanPct + '%';
@@ -819,8 +969,8 @@ function setKPI(valId, barId, pctId, value, target) {
 }
 
 function fanScoreClass(score) {
-  if (score >= 12) return 'fan-score-green';
-  if (score >= 8) return 'fan-score-amber';
+  if (score >= state.fanTarget) return 'fan-score-green';
+  if (score >= state.fanTarget * 0.6) return 'fan-score-amber';
   return 'fan-score-red';
 }
 
@@ -916,13 +1066,21 @@ function renderSignage(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
     document.getElementById('sig-kpi-referrals').textContent = qtd.referrals;
     document.getElementById('sig-kpi-repeat').textContent = qtd.repeat;
 
+    ['reviews', 'mentions', 'referrals', 'repeat'].forEach(k => {
+      const targetEl = document.getElementById('sig-target-' + k);
+      if (targetEl) targetEl.textContent = 'Target: ' + state.targets[k];
+    });
+
     setTimeout(() => {
-      setSignageProgress('sig-prog-reviews', qtd.reviews, TARGETS.reviews);
-      setSignageProgress('sig-prog-mentions', qtd.mentions, TARGETS.mentions);
-      setSignageProgress('sig-prog-referrals', qtd.referrals, TARGETS.referrals);
-      setSignageProgress('sig-prog-repeat', qtd.repeat, TARGETS.repeat);
+      setSignageProgress('sig-prog-reviews', qtd.reviews, state.targets.reviews);
+      setSignageProgress('sig-prog-mentions', qtd.mentions, state.targets.mentions);
+      setSignageProgress('sig-prog-referrals', qtd.referrals, state.targets.referrals);
+      setSignageProgress('sig-prog-repeat', qtd.repeat, state.targets.repeat);
     }, 300);
   }
+
+  // Champions panel — grouped by champion, from the sheet's METRIC CHAMPIONS section
+  renderChampionsPanel();
 
   // Reviews panels
   if (state.reviews.length >= 1) {
@@ -975,6 +1133,28 @@ function renderSignage(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
 
   // Bottom text rotation
   setupBottomTextRotation();
+}
+
+function renderChampionsPanel() {
+  const el = document.getElementById('sig-champions');
+  if (!el) return;
+  const groups = [];
+  ['reviews', 'mentions', 'referrals', 'repeat'].forEach(k => {
+    const name = state.champions[k];
+    if (!name) return;
+    let g = groups.find(g => g.name === name);
+    if (!g) { g = { name, metrics: [] }; groups.push(g); }
+    g.metrics.push(k);
+  });
+  el.innerHTML = groups.map(g => `
+    <div class="signage-kpi-card flex items-center gap-4">
+      <div class="text-3xl">${METRIC_META[g.metrics[0]].emoji}</div>
+      <div>
+        <div class="text-white font-bold text-lg">${g.name}</div>
+        <div class="text-gray-400 text-sm">${g.metrics.map(m => METRIC_META[m].label).join(' + ')}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 function setSignageProgress(id, value, target) {
