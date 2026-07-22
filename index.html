@@ -668,6 +668,13 @@ function parseScorecard(rows) {
     // Only rows whose Week Ending cell is an actual date are scorecard weeks;
     // this skips the METRIC CHAMPIONS / TARGETS sections lower in the tab.
     if (!DATE_RE.test(weekEnd)) continue;
+    // The sheet pre-fills the whole quarter's week rows with dates; a week
+    // only counts once at least one metric cell has been filled in, otherwise
+    // empty future weeks read as real zero-score weeks and drag the trailing
+    // average, trend and sparkline down to zero.
+    const hasEntry = [col.reviews, col.mentions, col.referrals, col.repeat]
+      .some(ci => cellText(r, ci) !== '');
+    if (!hasEntry) continue;
     const reviews = parseInt(cellText(r, col.reviews)) || 0;
     const mentions = parseInt(cellText(r, col.mentions)) || 0;
     const referrals = parseInt(cellText(r, col.referrals)) || 0;
@@ -891,10 +898,10 @@ function renderStandard(qtd, activeWeek, trailingAvg, refreshStr, qLabel) {
     const trendEl = document.getElementById('fan-score-trend');
     if (trailingAvg > prevAvg) {
       trendEl.textContent = '\u25B2 Up';
-      trendEl.className = 'font-semibold text-green-600';
+      trendEl.className = 'font-semibold fan-score-green';
     } else if (trailingAvg < prevAvg) {
       trendEl.textContent = '\u25BC Down';
-      trendEl.className = 'font-semibold text-red-500';
+      trendEl.className = 'font-semibold fan-score-red';
     } else {
       trendEl.textContent = '\u25B6 Flat';
       trendEl.className = 'font-semibold text-gray-500';
