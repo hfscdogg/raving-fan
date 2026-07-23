@@ -351,7 +351,8 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
     <div id="error-msg" class="hidden text-center py-12 text-gray-400">
       <div class="text-4xl mb-3">&#9888;&#65039;</div>
       <div>Unable to load data from Google Sheets.</div>
-      <div class="text-sm mt-1">Make sure the sheet is shared publicly. Retrying in 90 seconds...</div>
+      <div class="text-sm mt-1" id="error-hint">Make sure the sheet is shared publicly. Retrying in 90 seconds...</div>
+      <div class="text-xs mt-4 text-left inline-block bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono max-w-2xl overflow-x-auto" id="error-detail"></div>
     </div>
   </div>
 </div>
@@ -516,43 +517,76 @@ function sheetURLs(tab) {
   return urls;
 }
 
-function fetchCSV(tab) {
+// Per-refresh log of every failed URL attempt, shown in the error panel so a
+// screenshot of the failing dashboard is enough to diagnose what went wrong.
+let fetchLog = [];
+
+function urlKind(url) {
+  if (url.includes('/gviz/') && url.includes('sheet=')) return 'gviz by name';
+  if (url.includes('/pub?')) return 'published CSV';
+  if (url.includes('/gviz/')) return 'gviz by gid';
+  if (url.includes('/export')) return 'export by gid';
+  return 'csv';
+}
+
+async function fetchCSV(tab) {
   const urls = sheetURLs(tab);
   const label = tab.name || ('gid=' + tab.gid);
-  let attempt = 0;
-
-  function tryNext() {
-    if (attempt >= urls.length) {
-      console.warn('[RavingFan] All CSV URL formats failed for tab ' + label);
-      return Promise.resolve(null);
-    }
-    const url = urls[attempt++];
+  for (const url of urls) {
     console.log('[RavingFan] Trying tab=' + label + ' url=' + url);
-    return new Promise((resolve) => {
-      Papa.parse(url, {
-        download: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          if (results.data && results.data.length > 1) {
-            console.log('[RavingFan] Success tab=' + label + ' rows=' + results.data.length);
-            resolve(results.data);
-          } else {
-            console.warn('[RavingFan] Empty result for tab=' + label + ', trying next URL');
-            tryNext().then(resolve);
-          }
-        },
-        error: (err) => {
-          console.warn('[RavingFan] Error for tab=' + label + ':', err);
-          tryNext().then(resolve);
-        }
-      });
-    });
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        fetchLog.push({ tab: label, kind: urlKind(url), status: 'HTTP ' + resp.status });
+        continue;
+      }
+      const text = await resp.text();
+      if (/^\s*</.test(text)) {
+        // A login or error page, not CSV
+        fetchLog.push({ tab: label, kind: urlKind(url), status: 'got HTML, not CSV' });
+        continue;
+      }
+      const results = Papa.parse(text, { skipEmptyLines: true });
+      if (results.data && results.data.length > 1) {
+        console.log('[RavingFan] Success tab=' + label + ' rows=' + results.data.length);
+        return results.data;
+      }
+      fetchLog.push({ tab: label, kind: urlKind(url), status: 'empty CSV' });
+    } catch (e) {
+      // fetch() rejects on network errors and CORS blocks without a status
+      fetchLog.push({ tab: label, kind: urlKind(url), status: 'blocked (network/CORS)' });
+      console.warn('[RavingFan] Error for tab=' + label + ':', e);
+    }
   }
+  console.warn('[RavingFan] All CSV URL formats failed for tab ' + label);
+  return null;
+}
 
-  return tryNext();
+function showFetchDiagnostics() {
+  const detailEl = document.getElementById('error-detail');
+  const hintEl = document.getElementById('error-hint');
+  if (!detailEl) return;
+  detailEl.innerHTML = fetchLog.map(f =>
+    '<div>' + f.tab + ' &rarr; ' + f.kind + ' &rarr; <b>' + f.status + '</b></div>'
+  ).join('');
+  if (!hintEl) return;
+  const statuses = fetchLog.map(f => f.status).join(' ');
+  if (statuses.includes('HTTP 403') || statuses.includes('got HTML')) {
+    hintEl.textContent = 'The sheet responded but refused the CSV export. In Google Sheets check: Share → gear icon → "Viewers and commenters can see the option to download, print, and copy" must be ON; and File → Share → Publish to web must show the document as published.';
+  } else if (statuses.includes('blocked')) {
+    hintEl.textContent = 'The browser could not reach Google Sheets (network filter, content blocker, or the sheet is not shared publicly). Retrying in 90 seconds...';
+  }
 }
 
 async function fetchAllData() {
+  if (typeof Papa === 'undefined') {
+    document.getElementById('loading-msg')?.classList.add('hidden');
+    document.getElementById('error-msg')?.classList.remove('hidden');
+    const hintEl = document.getElementById('error-hint');
+    if (hintEl) hintEl.textContent = 'A required library (PapaParse from cdnjs.cloudflare.com) failed to load — a network filter or content blocker may be blocking CDN scripts.';
+    return;
+  }
+  fetchLog = [];
   const [sc, rv, rf, rp, ...hist] = await Promise.all([
     fetchCSV(TABS.scorecard),
     fetchCSV(TABS.reviews),
@@ -611,6 +645,7 @@ async function fetchAllData() {
   } else if (!state.loaded) {
     document.getElementById('loading-msg')?.classList.add('hidden');
     document.getElementById('error-msg')?.classList.remove('hidden');
+    showFetchDiagnostics();
   }
 }
 
@@ -1178,6 +1213,7 @@ function parseAmount(str) {
 // SPARKLINE CHART
 // =========================================================================
 function renderSparkline(canvasId, isDark) {
+  if (typeof Chart === 'undefined') return; // chart CDN blocked — keep the rest of the dashboard alive
   const canvas = document.getElementById(canvasId);
   if (!canvas || state.scorecard.length === 0) return;
 
