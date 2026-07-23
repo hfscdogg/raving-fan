@@ -188,6 +188,7 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; }
         <div id="std-week-label">Week ending —</div>
         <div>Prepared by Stacy</div>
         <div id="std-refresh-time">Last refreshed: —</div>
+        <div id="data-status" class="text-xs text-gray-400 mt-1"></div>
       </div>
     </div>
   </div>
@@ -503,14 +504,19 @@ let carouselIdx = 0, carouselTimer = null;
 // Try multiple URL formats — gviz by tab name first (immune to gid changes),
 // then published / gviz / export by gid as fallbacks.
 function sheetURLs(tab) {
+  // headers=0 stops gviz from auto-detecting "header rows" and swallowing or
+  // reshaping the top of the sheet — we want the raw grid, like the export URL.
   const urls = [];
   if (tab.name) {
-    urls.push(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab.name)}`);
+    urls.push(
+      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(tab.name)}`,
+      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab.name)}`,
+    );
   }
   if (tab.gid !== null && tab.gid !== undefined) {
     urls.push(
       `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?output=csv&gid=${tab.gid}`,
-      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${tab.gid}`,
+      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=0&gid=${tab.gid}`,
       `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${tab.gid}`,
     );
   }
@@ -529,13 +535,21 @@ function urlKind(url) {
   return 'csv';
 }
 
-async function fetchCSV(tab) {
+// Per-tab outcome of the last refresh, shown in the always-visible status
+// line so partial failures aren't invisible.
+let tabStatus = {};
+
+// A URL only counts as a success if `validate` can extract usable records
+// from its CSV — Google's endpoints sometimes answer 200 with a reshaped or
+// wrong-tab CSV, and treating that as success used to leave the dashboard
+// blank with no error. An unusable format now falls through to the next URL.
+async function fetchCSV(tab, validate) {
   const urls = sheetURLs(tab);
   const label = tab.name || ('gid=' + tab.gid);
   for (const url of urls) {
     console.log('[RavingFan] Trying tab=' + label + ' url=' + url);
     try {
-      const resp = await fetch(url);
+      const resp = await fetch(url, { cache: 'no-store' });
       if (!resp.ok) {
         fetchLog.push({ tab: label, kind: urlKind(url), status: 'HTTP ' + resp.status });
         continue;
@@ -547,11 +561,19 @@ async function fetchCSV(tab) {
         continue;
       }
       const results = Papa.parse(text, { skipEmptyLines: true });
-      if (results.data && results.data.length > 1) {
-        console.log('[RavingFan] Success tab=' + label + ' rows=' + results.data.length);
-        return results.data;
+      const rows = results.data;
+      if (!rows || rows.length <= 1) {
+        fetchLog.push({ tab: label, kind: urlKind(url), status: 'empty CSV' });
+        continue;
       }
-      fetchLog.push({ tab: label, kind: urlKind(url), status: 'empty CSV' });
+      const records = validate ? validate(rows) : 1;
+      if (!records) {
+        fetchLog.push({ tab: label, kind: urlKind(url), status: 'CSV loaded (' + rows.length + ' rows) but no usable records — unexpected format' });
+        continue;
+      }
+      console.log('[RavingFan] Success tab=' + label + ' rows=' + rows.length + ' records=' + records);
+      tabStatus[label] = { ok: true, detail: records + ' records via ' + urlKind(url) };
+      return rows;
     } catch (e) {
       // fetch() rejects on network errors and CORS blocks without a status
       fetchLog.push({ tab: label, kind: urlKind(url), status: 'blocked (network/CORS)' });
@@ -559,7 +581,19 @@ async function fetchCSV(tab) {
     }
   }
   console.warn('[RavingFan] All CSV URL formats failed for tab ' + label);
+  const attempts = fetchLog.filter(f => f.tab === label);
+  tabStatus[label] = { ok: false, detail: attempts.length ? attempts[attempts.length - 1].status : 'no URLs' };
   return null;
+}
+
+function renderDataStatus() {
+  const el = document.getElementById('data-status');
+  if (!el) return;
+  el.innerHTML = Object.keys(tabStatus).map(label => {
+    const s = tabStatus[label];
+    const mark = s.ok ? '<span style="color:#10B981;">&#10003;</span>' : '<span style="color:#EF4444;">&#10007;</span>';
+    return mark + ' ' + label + (s.ok ? '' : ' (' + s.detail + ')');
+  }).join(' &nbsp;&middot;&nbsp; ');
 }
 
 function showFetchDiagnostics() {
@@ -587,13 +621,15 @@ async function fetchAllData() {
     return;
   }
   fetchLog = [];
+  tabStatus = {};
   const [sc, rv, rf, rp, ...hist] = await Promise.all([
-    fetchCSV(TABS.scorecard),
-    fetchCSV(TABS.reviews),
-    fetchCSV(TABS.referrals),
-    fetchCSV(TABS.repeat),
-    ...HISTORY_TABS.map(name => fetchCSV({ name })),
+    fetchCSV(TABS.scorecard, rows => parseScorecard(rows).length),
+    fetchCSV(TABS.reviews, rows => parseReviews(rows).length),
+    fetchCSV(TABS.referrals, rows => parseReferrals(rows).length),
+    fetchCSV(TABS.repeat, rows => parseRepeatClients(rows).length),
+    ...HISTORY_TABS.map(name => fetchCSV({ name }, rows => parseScorecard(rows).length)),
   ]);
+  renderDataStatus();
 
   let anyLoaded = false;
   let currentWeeks = [];
@@ -641,7 +677,17 @@ async function fetchAllData() {
 
   if (anyLoaded) {
     state.loaded = true;
-    render();
+    try {
+      render();
+    } catch (e) {
+      // Surface render crashes instead of leaving a half-blank page
+      console.error('[RavingFan] render failed:', e);
+      document.getElementById('loading-msg')?.classList.add('hidden');
+      document.getElementById('error-msg')?.classList.remove('hidden');
+      const hintEl = document.getElementById('error-hint');
+      if (hintEl) hintEl.textContent = 'Data loaded but the page failed while rendering: ' + (e && e.message ? e.message : e);
+      showFetchDiagnostics();
+    }
   } else if (!state.loaded) {
     document.getElementById('loading-msg')?.classList.add('hidden');
     document.getElementById('error-msg')?.classList.remove('hidden');
