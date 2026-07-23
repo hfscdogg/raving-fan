@@ -735,13 +735,31 @@ function metricKey(name) {
 
 function parseScorecard(rows) {
   const data = [];
-  const hIdx = findHeaderRow(rows, ['week ending', 'total fan score']);
+  // The gviz endpoint types each column by majority content and BLANKS cells
+  // that don't match (dates column loses the "Week Ending" label, number
+  // columns lose their headers entirely), so accept a header row identified
+  // by "Week Beginning" alone (column A is string-typed and always survives).
+  let hIdx = findHeaderRow(rows, ['week ending', 'total fan score']);
+  if (hIdx < 0) hIdx = findHeaderRow(rows, ['week beginning']);
   if (hIdx < 0) return data;
   const col = mapColumns(rows[hIdx], {
     weekBegin: 'week beginning', weekEnd: 'week ending', reviews: '5-star',
     mentions: 'mentioning staff', referrals: 'referred leads',
     repeat: 'repeat clients', fanScore: 'total fan score', notes: 'notes'
   });
+  // Recover gviz-blanked header labels from the sheet's fixed column order:
+  // Week Beginning, Week Ending, Reviews, Mentions, Referrals, Repeat,
+  // Fan Score, Notes.
+  if (col.weekBegin >= 0) {
+    const b = col.weekBegin;
+    if (col.weekEnd < 0) col.weekEnd = b + 1;
+    if (col.reviews < 0) col.reviews = b + 2;
+    if (col.mentions < 0) col.mentions = b + 3;
+    if (col.referrals < 0) col.referrals = b + 4;
+    if (col.repeat < 0) col.repeat = b + 5;
+    if (col.fanScore < 0) col.fanScore = b + 6;
+    if (col.notes < 0) col.notes = b + 7;
+  }
   for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r) continue;
@@ -787,15 +805,31 @@ function parseChampions(rows) {
 
 function parseTargets(rows) {
   const out = { targets: {}, fanWeekly: null };
-  const hIdx = rows.findIndex(r => (r || []).some(c => String(c || '').toLowerCase().includes('quarterly target')));
+  // gviz blanks the "Current Avg" / "Quarterly Target" header labels (they sit
+  // in date/number-typed columns), so fall back to the TARGETS section title
+  // in column A, which always survives.
+  let hIdx = rows.findIndex(r => (r || []).some(c => String(c || '').toLowerCase().includes('quarterly target')));
+  let tCol = hIdx >= 0 ? rows[hIdx].findIndex(c => String(c || '').toLowerCase().includes('quarterly target')) : -1;
+  if (hIdx < 0) {
+    hIdx = rows.findIndex(r => String(r?.[0] || '').toLowerCase().startsWith('targets ('));
+    if (hIdx >= 0) hIdx += 1; // skip the mangled "Metric / ..." header row that follows
+  }
   if (hIdx < 0) return out;
-  const tCol = rows[hIdx].findIndex(c => String(c || '').toLowerCase().includes('quarterly target'));
+  // In gviz output the Current Avg column is blanked, so the first numeric
+  // cell in a metric row is the quarterly target.
+  const firstNumeric = r => {
+    for (let i = 1; i < r.length; i++) {
+      const v = parseFloat(String(r[i] ?? '').replace(/,/g, ''));
+      if (!isNaN(v)) return v;
+    }
+    return NaN;
+  };
   for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r || !r[0]) continue;
     const key = metricKey(r[0]);
     if (!key) break; // past the end of the TARGETS table
-    const val = parseFloat(cellText(r, tCol).replace(/,/g, ''));
+    const val = tCol >= 0 ? parseFloat(cellText(r, tCol).replace(/,/g, '')) : firstNumeric(r);
     if (key === 'fanScore') {
       // Weekly pace lives in the Owner Notes cell, e.g. "12.5 weekly"
       const m = r.join(' ').match(/([\d.]+)\s*(?:per week|weekly)/i);
