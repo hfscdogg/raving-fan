@@ -12,7 +12,10 @@
     tabs in the sheet won't break the dashboard. Columns are matched by their
     header text, so adding/moving columns is safe too.
   - Historical scorecard tabs (e.g. "Q1 & Q2 2026") are listed in HISTORY_TABS
-    and merged into the trend line / trailing averages automatically.
+    and merged into the trend line / trailing averages automatically. Tabs
+    named "Q<n> <year>" (e.g. "Q3 2026") for the last four quarters are
+    discovered automatically — no code change needed when archiving a quarter.
+  - KPIs always show the current calendar quarter (Q4 = Oct–Dec).
   - Quarterly targets and metric champions are read from the TARGETS and
     METRIC CHAMPIONS sections of the Scorecard tab on every refresh.
   2. Standard view: Open this file in any browser
@@ -470,6 +473,20 @@ const TABS = {
 // Archived scorecard tabs — merged into the trend line, trailing averages and
 // the Weekly Scorecard table. Add a tab name here each time a quarter is archived.
 const HISTORY_TABS = ['Q1 & Q2 2026'];
+// Archive tabs named "Q<n> <year>" (e.g. "Q3 2026") for the last four quarters
+// are also picked up automatically, so archiving a quarter at switchover needs
+// no code change. Tabs that don't exist yet are skipped silently.
+function autoHistoryTabs(now = new Date()) {
+  const names = [];
+  let q = Math.floor(now.getMonth() / 3) + 1, y = now.getFullYear();
+  for (let i = 0; i < 4; i++) {
+    q -= 1;
+    if (q < 1) { q = 4; y -= 1; }
+    const name = 'Q' + q + ' ' + y;
+    if (!HISTORY_TABS.includes(name)) names.push(name);
+  }
+  return names;
+}
 // Fallbacks only — live values are read from the TARGETS / METRIC CHAMPIONS
 // sections of the Scorecard tab on every refresh.
 const TARGETS = { reviews: 26, mentions: 15, referrals: 72, repeat: 75 };
@@ -543,8 +560,9 @@ let tabStatus = {};
 // from its CSV — Google's endpoints sometimes answer 200 with a reshaped or
 // wrong-tab CSV, and treating that as success used to leave the dashboard
 // blank with no error. An unusable format now falls through to the next URL.
-async function fetchCSV(tab, validate) {
+async function fetchCSV(tab, validate, optional = false) {
   const urls = sheetURLs(tab);
+  const logStart = fetchLog.length;
   const label = tab.name || ('gid=' + tab.gid);
   for (const url of urls) {
     console.log('[RavingFan] Trying tab=' + label + ' url=' + url);
@@ -579,6 +597,11 @@ async function fetchCSV(tab, validate) {
       fetchLog.push({ tab: label, kind: urlKind(url), status: 'blocked (network/CORS)' });
       console.warn('[RavingFan] Error for tab=' + label + ':', e);
     }
+  }
+  if (optional) {
+    // Auto-discovered tab that doesn't exist (yet) — not an error.
+    fetchLog.splice(logStart);
+    return null;
   }
   console.warn('[RavingFan] All CSV URL formats failed for tab ' + label);
   const attempts = fetchLog.filter(f => f.tab === label);
@@ -622,13 +645,29 @@ async function fetchAllData() {
   }
   fetchLog = [];
   tabStatus = {};
-  const [sc, rv, rf, rp, ...hist] = await Promise.all([
+  const autoTabs = autoHistoryTabs();
+  const [sc, rv, rf, rp, ...histAll] = await Promise.all([
     fetchCSV(TABS.scorecard, rows => parseScorecard(rows).length),
     fetchCSV(TABS.reviews, rows => parseReviews(rows).length),
     fetchCSV(TABS.referrals, rows => parseReferrals(rows).length),
     fetchCSV(TABS.repeat, rows => parseRepeatClients(rows).length),
     ...HISTORY_TABS.map(name => fetchCSV({ name }, rows => parseScorecard(rows).length)),
+    ...autoTabs.map(name => fetchCSV({ name }, rows => parseScorecard(rows).length, true)),
   ]);
+  // gviz answers an unknown sheet name with the first tab instead of an error,
+  // so an auto tab whose CSV matches another tab's is treated as missing.
+  const seenCSV = new Set([sc, rv, rf, rp].filter(Boolean).map(r => JSON.stringify(r)));
+  const hist = histAll.map((h, i) => {
+    if (!h) return null;
+    const key = JSON.stringify(h);
+    const isAuto = i >= HISTORY_TABS.length;
+    if (isAuto && seenCSV.has(key)) {
+      delete tabStatus[autoTabs[i - HISTORY_TABS.length]];
+      return null;
+    }
+    seenCSV.add(key);
+    return h;
+  });
   renderDataStatus();
 
   let anyLoaded = false;
@@ -935,30 +974,11 @@ function render() {
   };
   qtd.fanScore = qtd.reviews + qtd.mentions + qtd.referrals + qtd.repeat;
 
-  // If current quarter has minimal activity (< 5 total), fall back to previous quarter
-  let displayQtd = qtd;
-  let qNum = Math.floor(now.getMonth() / 3) + 1;
-  let qYear = now.getFullYear();
-  if (qtd.fanScore < 5) {
-    const prevQMonth = qMonth - 3 < 0 ? 9 : qMonth - 3;
-    const prevQYear = qMonth - 3 < 0 ? now.getFullYear() - 1 : now.getFullYear();
-    const prevQStart = new Date(prevQYear, prevQMonth, 1);
-    const prevQWeeks = state.scorecard.filter(w => {
-      const d = new Date(w.weekEnd);
-      return d >= prevQStart && d < qStart;
-    });
-    if (prevQWeeks.length > 0) {
-      displayQtd = {
-        reviews: prevQWeeks.reduce((s, w) => s + w.reviews, 0),
-        mentions: prevQWeeks.reduce((s, w) => s + w.mentions, 0),
-        referrals: prevQWeeks.reduce((s, w) => s + w.referrals, 0),
-        repeat: prevQWeeks.reduce((s, w) => s + w.repeat, 0),
-      };
-      displayQtd.fanScore = displayQtd.reviews + displayQtd.mentions + displayQtd.referrals + displayQtd.repeat;
-      qNum = Math.floor(prevQMonth / 3) + 1;
-      qYear = prevQYear;
-    }
-  }
+  // Always show the calendar quarter we're in. Early in a quarter the KPIs
+  // start near zero; that's expected and resets cleanly at each switchover.
+  const displayQtd = qtd;
+  const qNum = Math.floor(now.getMonth() / 3) + 1;
+  const qYear = now.getFullYear();
 
   // Most recent week with activity for the Fan Score banner
   const activeWeek = [...state.scorecard].reverse().find(w =>
